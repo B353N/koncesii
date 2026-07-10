@@ -159,6 +159,7 @@ export interface UnifyStats {
   supplemented: number;
   conflicts: number;
   mirrorsSkipped: number;
+  egovSkippedEmpty: number;
 }
 
 export function unify(
@@ -173,6 +174,7 @@ export function unify(
     supplemented: 0,
     conflicts: 0,
     mirrorsSkipped: 0,
+    egovSkippedEmpty: 0,
   };
 
   const insGrantor = db.prepare(
@@ -227,9 +229,13 @@ export function unify(
     eikRaw: string | null,
     sourceUrl: string,
   ): string | null => {
-    const n = normText(name);
+    const eikFromName = extractEik(name);
+    // „„Гьошев ИН" ЕООД, ЕИК 202273601" → ЕИК-ът се показва отделно
+    const n = normText(name)
+      .replace(/[,;]?\s*(еик|булстат)[:.\s]*\d{9,13}/giu, "")
+      .replace(/[,;\s]+$/u, "");
     if (!n || /^няма\s/iu.test(n)) return null;
-    const eik = extractEik(eikRaw) ?? extractEik(n);
+    const eik = extractEik(eikRaw) ?? eikFromName;
     const id = eik ? `eik:${eik}` : `name:${slugify(n)}`;
     insConcessionaire.run(id, eik, n, normalizeName(n), sourceUrl);
     return id;
@@ -458,8 +464,21 @@ export function unify(
       continue;
     }
 
-    // няма съвпадение по ЕИК → самостоятелен запис от общинския регистър
+    // няма съвпадение по ЕИК → самостоятелен запис от общинския регистър.
+    // Изискване за същественост: предмет + поне една страна или сума —
+    // ред само със срок/номер не носи информация и не влиза в модела.
     const subject = normText(rec.subject || rec.object_description);
+    const hasSubstance =
+      subject &&
+      (normText(rec.concessionaire) ||
+        rec.eik ||
+        rec.payment ||
+        rec.payment_raw ||
+        normText(rec.grantor));
+    if (!hasSubstance) {
+      stats.egovSkippedEmpty++;
+      continue;
+    }
     const regNum =
       normText(rec.concession_id) ||
       `${rec.resource_uri}#${normText(rec.row_number) || egovSeq}`;

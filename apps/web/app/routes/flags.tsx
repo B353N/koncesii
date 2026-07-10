@@ -1,6 +1,12 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/flags";
-import { DataPending, ExportLinks, FlagBadge, PageTitle } from "../components";
+import {
+  DataPending,
+  ExportLinks,
+  FlagBadge,
+  PageTitle,
+  regNumLabel,
+} from "../components";
 import { fmtMonths } from "../format";
 import { getSummary, listFlagCodes, listFlagged } from "../queries.server";
 
@@ -108,12 +114,13 @@ export default function Flags({ loaderData }: Route.ComponentProps) {
                 <td className="py-2.5 pr-2">
                   <Link
                     to={`/concessions/${encodeURIComponent(r.reg_num)}`}
-                    className="text-water underline decoration-1 underline-offset-2"
+                    className="line-clamp-3 text-water underline decoration-1 underline-offset-2"
+                    title={r.title}
                   >
                     {r.title}
                   </Link>
-                  <span className="block font-mono text-xs text-stone">
-                    {r.reg_num}
+                  <span className="block truncate font-mono text-xs text-stone">
+                    {regNumLabel(r.reg_num)}
                   </span>
                 </td>
                 <td className="py-2.5 pr-2">{r.grantor_name ?? "—"}</td>

@@ -69,7 +69,8 @@ export function runIngest(
         `[ingest] export: ${nExport} реда, партиди: ${lots.length}, ` +
           `концесии: ${stats.concessions} (НКР ${stats.fromNkr}, egov ${stats.fromEgov}), ` +
           `допълнени: ${stats.supplemented}, конфликти: ${stats.conflicts}, ` +
-          `огледала прескочени: ${stats.mirrorsSkipped}, флагове: ${nFlags}`,
+          `огледала прескочени: ${stats.mirrorsSkipped}, ` +
+          `празни egov реда: ${stats.egovSkippedEmpty}, флагове: ${nFlags}`,
       );
     })();
 

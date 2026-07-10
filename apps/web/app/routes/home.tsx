@@ -115,7 +115,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <td className="py-2 pr-2">
                     <Link
                       to={`/concessions/${encodeURIComponent(c.reg_num)}`}
-                      className="text-water underline decoration-1 underline-offset-2"
+                      className="line-clamp-2 text-water underline decoration-1 underline-offset-2"
+                      title={c.title}
                     >
                       {c.title}
                     </Link>
@@ -145,7 +146,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                   <td className="py-2 pr-2">
                     <Link
                       to={`/concessions/${encodeURIComponent(c.reg_num)}`}
-                      className="text-water underline decoration-1 underline-offset-2"
+                      className="line-clamp-2 text-water underline decoration-1 underline-offset-2"
+                      title={c.title}
                     >
                       {c.title}
                     </Link>

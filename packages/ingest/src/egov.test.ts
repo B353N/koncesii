@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { extractRows, mapHeaders, normalizeResource } from "./egov";
+import {
+  extractGrantor,
+  extractRows,
+  mapHeaders,
+  normalizeResource,
+} from "./egov";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
 const payload = JSON.parse(
@@ -76,4 +81,20 @@ test("ЕИК се извлича от текста на концесионера
 test("празните редове преди хедъра и в края се прескачат", () => {
   const { records } = normalizeResource(payload, DATASET, "res-001");
   expect(records.every((r) => r["row_number"])).toBe(true);
+});
+
+test("концедентът се извлича от името на набора, не е името на регистъра", () => {
+  expect(extractGrantor("", "Регистър на концесиите в Община Костенец")).toBe(
+    "Община Костенец",
+  );
+  expect(
+    extractGrantor(
+      "",
+      "РЕГИСТЪР НА КОНЦЕСИИТЕ НА ТЕРИТОРИЯТА НА ОБЩИНА БОЙЧИНОВЦИ",
+    ),
+  ).toBe("Община Бойчиновци");
+  expect(extractGrantor("Община Драгоман", "Регистър на концесиите")).toBe(
+    "Община Драгоман",
+  );
+  expect(extractGrantor("", "Регистър на концесиите 2023 година")).toBeNull();
 });

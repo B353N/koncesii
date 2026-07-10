@@ -158,7 +158,8 @@ CREATE TABLE objects (
   nuts_code     TEXT,
   cadastre_id   TEXT,
   lat           REAL,                   -- геокодира се в ETL (фаза 4), не на живо
-  lon           REAL
+  lon           REAL,
+  geo_precision TEXT                    -- 'settlement' | 'municipality' (центроид, приблизително)
 );
 CREATE INDEX idx_objects_concession ON objects (concession_id);
 CREATE INDEX idx_objects_kind ON objects (kind);

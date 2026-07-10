@@ -18,6 +18,7 @@ const NAV = [
   ["/concessions", "Концесии"],
   ["/grantors", "Концеденти"],
   ["/companies", "Компании"],
+  ["/map", "Карта"],
   ["/flags", "Индикатори"],
   ["/methodology", "Методология"],
 ] as const;

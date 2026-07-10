@@ -6,6 +6,7 @@ const STATIC = [
   "/concessions",
   "/grantors",
   "/companies",
+  "/map",
   "/flags",
   "/search",
   "/methodology",

@@ -1,0 +1,5 @@
+Contact: https://github.com/B353N/koncesii/security/policy
+Expires: 2027-07-10T00:00:00.000Z
+Preferred-Languages: bg, en
+Canonical: https://koncesii.com/.well-known/security.txt
+Policy: https://github.com/B353N/koncesii/security/policy

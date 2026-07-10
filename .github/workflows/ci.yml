@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least-privilege default token; no job in this workflow writes to the repo.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Secret scan FIRST, on the pristine checkout (tracked files only),
+      # before `pnpm install` creates node_modules. Pinned gitleaks CLI —
+      # the Action needs a paid license on orgs, the binary does not.
+      - name: Secret scan (gitleaks)
+        env:
+          GITLEAKS_VERSION: '8.30.1'
+          GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" dir . --redact --no-banner
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+      - name: Lint
+        run: pnpm lint
+      # Run regardless of a Lint failure so a formatting nit doesn't mask
+      # the type/test signal; `!cancelled()` still skips on cancel.
+      - name: Typecheck
+        if: ${{ !cancelled() }}
+        run: pnpm typecheck
+      - name: Test
+        if: ${{ !cancelled() }}
+        run: pnpm test
+      # Docs integrity: fail on a dangling docs reference or an unindexed doc.
+      - name: Docs integrity
+        if: ${{ !cancelled() }}
+        run: |
+          pnpm check:docs:test
+          pnpm check:docs
+      # No Co-Authored-By trailers (repo convention, AGENTS.md).
+      - name: Commit trailer check
+        if: ${{ github.event_name == 'pull_request' && !cancelled() }}
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=50
+          if git log origin/${{ github.base_ref }}..HEAD --format=%B | grep -qi 'Co-Authored-By:'; then
+            echo '::error::Co-Authored-By trailers are not allowed (see AGENTS.md)'; exit 1
+          fi

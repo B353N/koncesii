@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+dist/
+.wrangler/
+.dev.vars
+.env*
+# harvested raw data lives in R2, never in git
+tools/harvest/nkr_data/
+tools/harvest/data/
+__pycache__/

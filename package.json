@@ -1,0 +1,27 @@
+{
+  "name": "koncesii",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "prettier --check .",
+    "format": "prettier --write .",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:docs:test": "node --test scripts/check-docs.test.mjs",
+    "setup": "node scripts/setup.mjs",
+    "deploy": "turbo run deploy"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.3",
+    "turbo": "^2.9.14",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
+    "wrangler": "^4.93.1"
+  }
+}

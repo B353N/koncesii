@@ -1,16 +1,133 @@
+/* Шрифтовете са self-hosted (без външни CDN-и, строг CSP) — docs/design.md. */
+@import "@fontsource/literata/cyrillic-400.css";
+@import "@fontsource/literata/cyrillic-700.css";
+@import "@fontsource/literata/400.css";
+@import "@fontsource/literata/700.css";
+@import "@fontsource/ibm-plex-sans/cyrillic-400.css";
+@import "@fontsource/ibm-plex-sans/cyrillic-600.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/cyrillic-400.css";
+@import "@fontsource/ibm-plex-mono/cyrillic-500.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
 @import "tailwindcss";
 
+/* Токените на визуалния език — docs/design.md е източникът на истина. */
 @theme {
-  --font-sans:
-    "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --color-ink: #1b2a2c;
+  --color-water: #14464c;
+  --color-water-br: #0f6a6b;
+  --color-paper: #fbfbf8;
+  --color-raised: #ffffff;
+  --color-limestone: #e3e4dc;
+  --color-stone: #5e6e6c;
+  --color-oxide: #a63a21;
+  --color-ochre: #8f6400;
+
+  --font-display: "Literata", Georgia, "Times New Roman", serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 
-html,
-body {
-  @apply bg-white dark:bg-gray-950;
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
+:focus-visible {
+  outline: 2px solid var(--color-water-br);
+  outline-offset: 2px;
+}
+
+/* Подписът: кадастралната щриховка (docs/design.md). Само за индикатори. */
+.hatch-high {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 5px,
+    rgba(166, 58, 33, 0.28) 5px 6px
+  );
+}
+.hatch-med {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 5px,
+    rgba(143, 100, 0, 0.3) 5px 6px
+  );
+}
+.hatch-low {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0 5px,
+    rgba(94, 110, 108, 0.28) 5px 6px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
+}
+
+/* Методологията се рендира от docs/red-flags.md (markdown → html). */
+.prose-koncesii h1 {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+}
+.prose-koncesii h2 {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 1.75rem 0 0.5rem;
+}
+.prose-koncesii p,
+.prose-koncesii li {
+  line-height: 1.6;
+  margin: 0.5rem 0;
+}
+.prose-koncesii ol,
+.prose-koncesii ul {
+  padding-left: 1.4rem;
+  list-style: revert;
+}
+.prose-koncesii table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13.5px;
+  margin: 0.75rem 0;
+  display: block;
+  overflow-x: auto;
+}
+.prose-koncesii th {
+  border-bottom: 1.5px solid var(--color-ink);
+  text-align: left;
+  padding: 6px 10px 6px 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-stone);
+}
+.prose-koncesii td {
+  border-bottom: 1px solid var(--color-limestone);
+  padding: 7px 10px 7px 0;
+}
+.prose-koncesii code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: #f4f5f0;
+  border: 1px solid var(--color-limestone);
+  border-radius: 2px;
+  padding: 0 4px;
+}
+.prose-koncesii a {
+  color: var(--color-water);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

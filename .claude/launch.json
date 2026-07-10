@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "KONCESII_DB=/Users/rumen/Claude/Projects/koncesii/build/koncesii.local.sqlite PORT=3178 pnpm --filter web start"
+      ],
+      "port": 3178
+    }
+  ]
+}

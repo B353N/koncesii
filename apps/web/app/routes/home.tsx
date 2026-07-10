@@ -17,6 +17,7 @@ export function meta({}: Route.MetaArgs) {
       content:
         "Публичен портал за всички концесии в България — язовири, плажове, добив, публична собственост. Всяка сделка е проследима до официалния източник.",
     },
+    { tagName: "link", rel: "canonical", href: "https://koncesii.com/" },
   ];
 }
 

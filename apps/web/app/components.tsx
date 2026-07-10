@@ -159,7 +159,7 @@ export function ConcessionsTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="my-2 w-full table-fixed border-collapse text-[13.5px]">
+      <table className="my-2 w-full min-w-[760px] table-fixed border-collapse text-[13.5px]">
         <thead>
           <tr className="border-b-[1.5px] border-ink text-left font-mono text-[11.5px] uppercase tracking-wider text-stone">
             <th scope="col" className="w-[34%] py-2 pr-2 font-medium">

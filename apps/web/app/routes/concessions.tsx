@@ -10,7 +10,19 @@ import { KIND_LABELS } from "../format";
 import { getSummary, listConcessions } from "../queries.server";
 
 export function meta({}: Route.MetaArgs) {
-  return [{ title: "Концесии — КОНЦЕСИИ" }];
+  return [
+    { title: "Концесии — КОНЦЕСИИ" },
+    {
+      name: "description",
+      content:
+        "Всички концесии в България с филтри по вид, статус и индикатори. CSV експорт, всяка партида проследима до Националния концесионен регистър.",
+    },
+    {
+      tagName: "link",
+      rel: "canonical",
+      href: "https://koncesii.com/concessions",
+    },
+  ];
 }
 
 const PAGE = 50;
@@ -83,26 +95,49 @@ export default function Concessions({ loaderData }: Route.ComponentProps) {
       <ConcessionsTable rows={rows} />
       {pages > 1 && (
         <nav
-          className="mt-4 flex gap-2 font-mono text-[13px]"
+          className="mt-4 flex flex-wrap items-center gap-2 font-mono text-[13px]"
           aria-label="Страници"
         >
-          {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
-            <Link
-              key={p}
-              to={`/concessions?${qs ? qs + "&" : ""}page=${p}`}
-              className={
-                p === page
-                  ? "border border-water px-2.5 py-1 text-water"
-                  : "border border-limestone px-2.5 py-1 text-stone hover:border-water hover:text-water"
-              }
-            >
-              {p}
-            </Link>
-          ))}
+          {pageWindow(page, pages).map((p, i) =>
+            p === null ? (
+              <span key={`gap-${i}`} className="px-1 text-stone">
+                …
+              </span>
+            ) : (
+              <Link
+                key={p}
+                to={`/concessions?${qs ? qs + "&" : ""}page=${p}`}
+                aria-current={p === page ? "page" : undefined}
+                className={
+                  p === page
+                    ? "border border-water px-2.5 py-1 text-water"
+                    : "border border-limestone px-2.5 py-1 text-stone hover:border-water hover:text-water"
+                }
+              >
+                {p}
+              </Link>
+            ),
+          )}
         </nav>
       )}
     </>
   );
+}
+
+/** 1 … 8 9 [10] 11 12 … 32 — компактна пагинация и на мобилен. */
+function pageWindow(current: number, total: number): Array<number | null> {
+  const wanted = new Set([1, 2, total - 1, total]);
+  for (let p = current - 2; p <= current + 2; p++) wanted.add(p);
+  const pages = [...wanted]
+    .filter((p) => p >= 1 && p <= total)
+    .sort((a, b) => a - b);
+  const out: Array<number | null> = [];
+  for (const p of pages) {
+    const prev = out[out.length - 1];
+    if (typeof prev === "number" && p - prev > 1) out.push(null);
+    out.push(p);
+  }
+  return out;
 }
 
 function FilterChip({

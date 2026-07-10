@@ -66,15 +66,32 @@ interface AnnouncementFacts {
 }
 
 function factsFromAnnouncement(payload: {
-  sections?: Record<string, { items?: Record<string, string | null> }>;
+  sections?: Record<
+    string,
+    { text?: string; items?: Record<string, string | null>; groups?: string[] }
+  >;
 }): AnnouncementFacts {
   const facts: AnnouncementFacts = {};
-  for (const section of Object.values(payload.sections ?? {})) {
+  for (const [key, section] of Object.entries(payload.sections ?? {})) {
     for (const [label, value] of Object.entries(section.items ?? {})) {
       if (!value) continue;
       for (const [field, re] of ITEM_FIELDS) {
         if (re.test(label) && facts[field] === undefined) facts[field] = value;
       }
+    }
+    // Разделът за концесионера няма номерация: име + ЕИК са във form-groups.
+    if (
+      /концесионер/iu.test(key) &&
+      facts["concessionaire_name"] === undefined
+    ) {
+      const blob = [...(section.groups ?? []), section.text ?? ""].join(" ");
+      const eik = extractEik(blob);
+      if (eik) facts["concessionaire_eik"] = eik;
+      const name =
+        (section.groups ?? []).find(
+          (g) => !/^еик|^булстат/iu.test(g.trim()) && !/^\d+$/.test(g.trim()),
+        ) ?? "";
+      if (normText(name)) facts["concessionaire_name"] = normText(name);
     }
   }
   return facts;
@@ -180,9 +197,13 @@ export function unify(
     return id;
   };
 
-  // ── 1. НКР: базата е експортът, обогатен от обявленията ────────────────
+  // ── 1. НКР: базата е експортът/индексът, обогатен от обявленията ────────
   const regToLot = new Map<string, StagedLot>();
-  for (const lot of lots) if (lot.regNum) regToLot.set(lot.regNum, lot);
+  const guidToLot = new Map<string, StagedLot>();
+  for (const lot of lots) {
+    guidToLot.set(lot.guid, lot);
+    if (lot.regNum) regToLot.set(lot.regNum, lot);
+  }
 
   const factsByGuid = new Map<string, AnnouncementFacts>();
   const annRows = db
@@ -224,15 +245,21 @@ export function unify(
     seenReg.add(er.reg_num);
     const row = JSON.parse(er.payload) as Record<string, string | null>;
 
-    const lot = regToLot.get(er.reg_num);
-    const facts = lot ? (factsByGuid.get(lot.guid) ?? {}) : {};
-    const sourceUrl = lot ? PARTIDA_URL(lot.guid) : EXPORT_URL;
+    const rowGuid = normText(row["guid"]) || null;
+    const lot =
+      (rowGuid ? guidToLot.get(rowGuid) : undefined) ??
+      regToLot.get(er.reg_num);
+    const guid = lot?.guid ?? rowGuid;
+    const facts = guid ? (factsByGuid.get(guid) ?? {}) : {};
+    const sourceUrl = guid ? PARTIDA_URL(guid) : EXPORT_URL;
 
-    const title = normText(pick(row, /наименование/i)) || er.reg_num;
+    const title =
+      normText(pick(row, /наименование|име на концеси/i)) || er.reg_num;
     const grantorId = upsertGrantor(pick(row, /концедент/i));
+    // Индексът няма колона за концесионер — той идва от обявлението.
     const concessionaireId = upsertConcessionaire(
-      pick(row, /концесионер/i),
-      pick(row, /^еик|булстат/i),
+      pick(row, /концесионер/i) ?? facts["concessionaire_name"] ?? null,
+      pick(row, /^еик|булстат/i) ?? facts["concessionaire_eik"] ?? null,
       sourceUrl,
     );
 
@@ -248,8 +275,11 @@ export function unify(
       id,
       reg_num: er.reg_num,
       title,
-      kind: concessionKind(pick(row, /вид/i)),
-      status: normText(pick(row, /статус|състояние/i)) || null,
+      kind: concessionKind(
+        pick(row, /предмет/i) ?? pick(row, /вид на концесията/i),
+      ),
+      status:
+        normText(pick(row, /статус на партида|статус|състояние/i)) || null,
       grantor_id: grantorId,
       concessionaire_id: concessionaireId,
       term_raw: term.raw,

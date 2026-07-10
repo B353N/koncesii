@@ -12,17 +12,18 @@ const STREAM_TIMEOUT = 10_000;
  * Строг CSP (docs/design.md, docs/architecture.md): всичко е 'self',
  * инлайн скриптовете на React Router минават през per-request nonce.
  * style 'unsafe-inline' покрива инлайн style атрибутите на React.
+ * Външни източници: OSM тайловете (ADR-0004) и Google Analytics 4 —
+ * домейните за GA са по CSP препоръката на Google за gtag.js.
  */
 function csp(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}'`,
+    `script-src 'self' 'nonce-${nonce}' https://*.googletagmanager.com`,
     "style-src 'self' 'unsafe-inline'",
-    // OSM тайловете за картата са единственият външен източник (ADR-0004)
-    "img-src 'self' data: blob: https://tile.openstreetmap.org",
+    "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.google-analytics.com https://*.googletagmanager.com",
     "font-src 'self' data:",
     // MapLibre тегли тайловете през fetch → connect-src, не img-src
-    "connect-src 'self' https://tile.openstreetmap.org",
+    "connect-src 'self' https://tile.openstreetmap.org https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

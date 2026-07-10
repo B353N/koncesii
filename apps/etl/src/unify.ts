@@ -97,8 +97,16 @@ function factsFromAnnouncement(payload: {
   return facts;
 }
 
+/**
+ * Набори, които са огледала на самия НКР (общини качват националния регистър
+ * като свой набор). НКР го имаме от първа ръка — огледалата се прескачат,
+ * детерминистично по името на набора. Броят се отчита в статистиката.
+ */
+const NKR_MIRROR_RE = /национален концесионен регистър/iu;
+
 interface EgovRow {
   resource_uri: string;
+  dataset_name?: string | null;
   concession_id?: string | null;
   subject?: string | null;
   object_description?: string | null;
@@ -122,6 +130,7 @@ export interface UnifyStats {
   fromEgov: number;
   supplemented: number;
   conflicts: number;
+  mirrorsSkipped: number;
 }
 
 export function unify(
@@ -135,6 +144,7 @@ export function unify(
     fromEgov: 0,
     supplemented: 0,
     conflicts: 0,
+    mirrorsSkipped: 0,
   };
 
   const insGrantor = db.prepare(
@@ -347,6 +357,10 @@ export function unify(
   let egovSeq = 0;
   for (const rec of egovRows) {
     egovSeq++;
+    if (rec.dataset_name && NKR_MIRROR_RE.test(rec.dataset_name)) {
+      stats.mirrorsSkipped++;
+      continue;
+    }
     const egovUrl = EGOV_URL(rec.resource_uri);
     const eik = rec.eik ? extractEik(rec.eik) : null;
     const matches = eik ? (byEik.get(eik) ?? []) : [];

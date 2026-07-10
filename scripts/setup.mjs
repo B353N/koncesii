@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// One-time dev setup. Grows with the project: local D1 + sample fixtures land
-// here with packages/db (v1 plan, phase 1).
+// One-time dev setup: инсталира зависимостите и билдва локална SQLite база
+// от фикстурите (контрибуторите нямат нужда от достъп до регистрите).
 import { execSync } from "node:child_process";
 
 const run = (cmd) => {
@@ -9,7 +9,10 @@ const run = (cmd) => {
 };
 
 run("pnpm install");
+run(
+  "pnpm --filter etl ingest --fixtures --out ../../build/koncesii.local.sqlite",
+);
 
 console.log(
-  "\n✓ setup done. Local D1 + sample data arrive with packages/db (see docs/v1-implementation-plan.md).\n  Start developing with: pnpm dev",
+  "\n✓ setup done: зависимости + локална база от фикстури (build/koncesii.local.sqlite).\n  Start developing with: pnpm dev",
 );

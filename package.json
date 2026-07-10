@@ -17,7 +17,10 @@
     "check:docs": "node scripts/check-docs.mjs",
     "check:docs:test": "node --test scripts/check-docs.test.mjs",
     "setup": "node scripts/setup.mjs",
-    "start": "pnpm --filter web start"
+    "start": "pnpm --filter web start",
+    "ingest": "pnpm --filter etl ingest",
+    "harvest:upload": "pnpm --filter etl upload",
+    "db:push": "pnpm --filter etl push"
   },
   "devDependencies": {
     "prettier": "^3.8.3",

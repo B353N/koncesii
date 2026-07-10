@@ -4,10 +4,22 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ingest": "tsx src/ingest.ts",
+    "upload": "tsx src/upload.ts",
+    "push": "tsx src/push.ts",
+    "test": "vitest run"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "@types/node": "^22"
+    "@types/node": "^22",
+    "@types/better-sqlite3": "^7.6.13",
+    "vitest": "^4.1.7"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.6",
+    "ingest": "workspace:*",
+    "shared": "workspace:*",
+    "tsx": "^4.20.7"
   }
 }

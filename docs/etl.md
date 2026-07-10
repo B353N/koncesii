@@ -78,12 +78,12 @@ PDF extraction опашка.
 
 Всеки staging ред носи `source` префикс:
 
-| Източник                  | `source` префикс                  |
-| ------------------------- | ---------------------------------- |
-| НКР експорт               | `nkr:export:YYYY-MM-DD`            |
-| НКР обявление             | `nkr:assigned:{guid}:YYYY-MM-DD`   |
-| Стар регистър             | `nkrold:{sp}:YYYY-MM-DD`           |
-| data.egov.bg ресурс       | `egov:{resource_uri}:vN`           |
+| Източник            | `source` префикс                 |
+| ------------------- | -------------------------------- |
+| НКР експорт         | `nkr:export:YYYY-MM-DD`          |
+| НКР обявление       | `nkr:assigned:{guid}:YYYY-MM-DD` |
+| Стар регистър       | `nkrold:{sp}:YYYY-MM-DD`         |
+| data.egov.bg ресурс | `egov:{resource_uri}:vN`         |
 
 ## Качество на данните — известни проблеми
 

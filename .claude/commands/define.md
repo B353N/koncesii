@@ -1,19 +1,19 @@
 ---
-version: '1.0'
-description: 'Collaborative design spec workflow — discuss ideas, then capture agreed decisions in a markdown file'
-argument-hint: '<specify goal.md location and/or brief goal definition>'
+version: "1.0"
+description: "Collaborative design spec workflow — discuss ideas, then capture agreed decisions in a markdown file"
+argument-hint: "<specify goal.md location and/or brief goal definition>"
 allowed-tools:
   [
-    'Bash(*)',
-    'Read(*)',
-    'Write(*.md)',
-    'Edit(*.md)',
-    'Glob(*)',
-    'Grep(*)',
-    'Task(*)',
-    'WebFetch(*)',
-    'WebSearch(*)',
-    'mcp__*',
+    "Bash(*)",
+    "Read(*)",
+    "Write(*.md)",
+    "Edit(*.md)",
+    "Glob(*)",
+    "Grep(*)",
+    "Task(*)",
+    "WebFetch(*)",
+    "WebSearch(*)",
+    "mcp__*",
   ]
 ---
 

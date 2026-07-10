@@ -1,7 +1,7 @@
 name: Проблем с данните / класификацията
 description: Неточна стойност, дублиран запис, грешна категория на възложител и подобни.
-title: '[Данни]: '
-labels: ['data-quality']
+title: "[Данни]: "
+labels: ["data-quality"]
 body:
   - type: markdown
     attributes:

@@ -1,7 +1,7 @@
 name: Доклад за бъг
 description: Нещо в сайта или кода не работи както трябва.
-title: '[Бъг]: '
-labels: ['bug']
+title: "[Бъг]: "
+labels: ["bug"]
 body:
   - type: markdown
     attributes:

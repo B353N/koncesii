@@ -45,7 +45,7 @@ No `develop`, no `staging`. Maintainers with write access work on short-lived fe
 ## Data domain rules (project-specific)
 
 - **ЕИК is the join key.** Concessionaires key by ЕИК (9 or 13 digits) when valid, by normalized name otherwise — ЕИК is the stable national company identifier, so joins against external datasets stay trivial.
-- **Never invent or "fix" registry values.** The source registries contain contradictions (BGN vs EUR duplicates, "Няма въведени данни", 2 300,81 лв. next to 4 500 лв. free text). Contradictions are *recorded and flagged*, not silently resolved. Every parsed value carries a `*_flag` column recording its quality.
+- **Never invent or "fix" registry values.** The source registries contain contradictions (BGN vs EUR duplicates, "Няма въведени данни", 2 300,81 лв. next to 4 500 лв. free text). Contradictions are _recorded and flagged_, not silently resolved. Every parsed value carries a `*_flag` column recording its quality.
 - **Red flags are computed, deterministic, and publicly documented** in [docs/red-flags.md](docs/red-flags.md). A flag is a reproducible arithmetic fact ("annual payment is 0.6% of asset value over a 35-year term"), never an accusation. Copy that implies wrongdoing is a defect — file it as a bug.
 - **Every displayed number must be traceable to a source URL** (НКР партида, data.egov.bg ресурс, документ). If provenance is lost in a transformation, the transformation is wrong.
 - Monetary amounts are stored in **both original form and normalized EUR** (`amount_eur`), with the BGN→EUR fixed rate 1.95583 for pre-euro values; the conversion date and rule live in `docs/core-scope.md`.

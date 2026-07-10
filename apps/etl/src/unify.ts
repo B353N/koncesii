@@ -50,16 +50,28 @@ function concessionKind(raw: string | null): string | null {
   return "other";
 }
 
-/** Съответствие: етикет на подточка от обявлението → домейн поле. */
+/**
+ * Съответствие: етикет на подточка от обявлението → домейн поле.
+ * Етикетите са от реалните формуляри на НКР (проверени на живо, 07.2026):
+ * „Дължимо концесионно възнаграждение съгласно сключения концесионен
+ * договор" е периодичното (годишно) възнаграждение; „еднократно" се
+ * проверява преди общото правило. Редът има значение.
+ */
 const ITEM_FIELDS: ReadonlyArray<readonly [string, RegExp]> = [
-  ["annual_payment", /годишно\s+(концесионно\s+)?възнаграждение/iu],
   ["onetime_payment", /еднократно\s+(концесионно\s+)?възнаграждение/iu],
+  [
+    "annual_payment",
+    /годишно\s+(концесионно\s+)?възнаграждение|(дължимо\s+)?концесионно\s+възнаграждение/iu,
+  ],
   ["value", /стойност\s+на\s+концесията/iu],
   ["term", /срок\s+на\s+концесията/iu],
   ["grace_period", /гратисен/iu],
   ["indexation", /индексаци/iu],
   ["bidder_count", /брой\s+(на\s+)?(участници|оференти|кандидати)/iu],
 ];
+
+/** Изменения/промени по договора не са първоначалните стойности. */
+const AMENDMENT_RE = /^(изменение|промяна|информация за промени)/iu;
 
 interface AnnouncementFacts {
   [field: string]: string;
@@ -74,9 +86,25 @@ function factsFromAnnouncement(payload: {
   const facts: AnnouncementFacts = {};
   for (const [key, section] of Object.entries(payload.sections ?? {})) {
     for (const [label, value] of Object.entries(section.items ?? {})) {
-      if (!value) continue;
+      if (!value || AMENDMENT_RE.test(label.replace(/^[\d. ]+/, ""))) continue;
       for (const [field, re] of ITEM_FIELDS) {
-        if (re.test(label) && facts[field] === undefined) facts[field] = value;
+        if (!re.test(label)) continue;
+        // Един етикет храни точно едно поле — първото съвпадение печели
+        // (иначе „Еднократно … възнаграждение" пълни и годишното поле).
+        if (facts[field] === undefined) {
+          // „Конкретен срок … (месеца)": голото число в стойността е в
+          // месеци — единицата идва от самия етикет на формуляра.
+          if (
+            field === "term" &&
+            /месец/iu.test(label) &&
+            /^\d+([.,]\d+)?$/.test(value.trim())
+          ) {
+            facts[field] = `${value.trim()} месеца`;
+          } else {
+            facts[field] = value;
+          }
+        }
+        break;
       }
     }
     // Разделът за концесионера няма номерация: име + ЕИК са във form-groups.
@@ -228,9 +256,10 @@ export function unify(
       kind?: string | null;
     };
     if (payload.kind && payload.kind !== "AssignedConcession") continue;
-    if (!factsByGuid.has(r.guid)) {
-      factsByGuid.set(r.guid, factsFromAnnouncement(payload));
-    }
+    // Партида може да има няколко обявления (вкл. изменения) — сливаме
+    // по поле: по-ранният staged документ печели, останалите допълват.
+    const existing = factsByGuid.get(r.guid) ?? {};
+    factsByGuid.set(r.guid, { ...factsFromAnnouncement(payload), ...existing });
   }
 
   const exportRows = db

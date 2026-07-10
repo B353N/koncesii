@@ -17,20 +17,27 @@ const EXACT_RE =
 
 export function parseTerm(rawInput: unknown): ParsedTerm {
   const raw = normText(rawInput);
-  if (!raw || NO_DATA_RE.test(raw)) {
+  if (!raw) {
     return { raw: raw || null, months: null, flag: "missing" };
   }
 
-  const m = NUM_RE.exec(raw);
+  // Както при парите: режем при „Няма въведени данни" и гледаме префикса.
+  const cutAt = raw.search(NO_DATA_RE);
+  const scope = cutAt === -1 ? raw : raw.slice(0, cutAt);
+  if (!scope.trim()) {
+    return { raw, months: null, flag: "missing" };
+  }
+
+  const m = NUM_RE.exec(scope);
   if (!m || !m[1]) return { raw, months: null, flag: "missing" };
   const n = Number(m[1].replace(",", "."));
   if (!Number.isFinite(n) || n <= 0)
     return { raw, months: null, flag: "missing" };
 
   let months: number;
-  if (MONTH_UNIT_RE.test(raw)) {
+  if (MONTH_UNIT_RE.test(scope)) {
     months = Math.round(n);
-  } else if (YEAR_UNIT_RE.test(raw)) {
+  } else if (YEAR_UNIT_RE.test(scope)) {
     months = Math.round(n * 12);
   } else {
     // Голо число без единица: общинските регистри пишат срока в години
@@ -39,5 +46,9 @@ export function parseTerm(rawInput: unknown): ParsedTerm {
     return { raw, months, flag: "parsed_from_text" };
   }
 
-  return { raw, months, flag: EXACT_RE.test(raw) ? "ok" : "parsed_from_text" };
+  return {
+    raw,
+    months,
+    flag: EXACT_RE.test(scope.trim()) ? "ok" : "parsed_from_text",
+  };
 }

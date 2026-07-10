@@ -56,3 +56,14 @@ test("eurFrom ползва фиксирания курс", () => {
   expect(eurFrom(195.583, "BGN")).toBe(100);
   expect(eurFrom(100, "EUR")).toBe(100);
 });
+
+test("сума преди „Няма въведени данни“ се парсва; след нея — не", () => {
+  const p = parseMoney(
+    "Да Размер (BGN без ДДС): 685,13 лв.или Няма въведени данни Срок за плащане: 5500 дни",
+  );
+  expect(p.value).toBe(685.13);
+  expect(p.flag).toBe("parsed_from_text");
+  expect(parseMoney("Няма въведени данни Срок за плащане: 5500 дни").flag).toBe(
+    "missing",
+  );
+});

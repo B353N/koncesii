@@ -26,7 +26,36 @@ export function loader({ params }: Route.LoaderArgs) {
   return { detail };
 }
 
-/** Стойност + суров низ + флаг за качество — оригиналът никога не изчезва. */
+/**
+ * Суровият низ от формуляра никога не изчезва, но не разтяга страницата:
+ * кратките цитати са видими, дългите се отварят при поискване.
+ */
+function SourceQuote({
+  raw,
+  flag,
+}: {
+  raw?: string | null;
+  flag?: string | null;
+}) {
+  if (raw == null) return null;
+  if (raw.length <= 90) {
+    return (
+      <span className="block max-w-[52ch] text-xs italic break-words text-stone">
+        източник: „{raw}“ · {flag}
+      </span>
+    );
+  }
+  return (
+    <details className="max-w-[52ch] text-xs text-stone">
+      <summary className="cursor-pointer italic select-none marker:text-limestone">
+        източник · {flag} · покажи оригиналния текст
+      </summary>
+      <span className="mt-1 block italic break-words">„{raw}“</span>
+    </details>
+  );
+}
+
+/** Стойност: парснатото число отпред, произходът — под него. */
 function Value({
   label,
   value,
@@ -39,21 +68,21 @@ function Value({
   flag?: string | null;
 }) {
   return (
-    <div>
+    <div className="min-w-0">
       <span className="block text-xs text-stone">{label}</span>
-      <b className="font-mono font-medium tabular-nums">{value}</b>
-      {raw != null && flag !== "missing" && (
-        <span className="block text-xs italic text-stone">
-          източник: „{raw}“ · {flag}
-        </span>
-      )}
-      {flag === "missing" && raw != null && (
-        <span className="block text-xs italic text-stone">
-          „{raw}“ · missing
-        </span>
-      )}
+      <b className="block font-mono font-medium tabular-nums break-words">
+        {value}
+      </b>
+      <SourceQuote raw={raw} flag={flag} />
     </div>
   );
+}
+
+/** Кратко парично представяне за паспорта: числото, не суровият абзац. */
+function moneyShort(raw: string | null, eur: number | null): string {
+  if (eur != null) return fmtEur(eur);
+  if (raw && raw.length <= 18) return raw;
+  return "—";
 }
 
 function Razdel({
@@ -79,6 +108,39 @@ function Razdel({
       </div>
     </section>
   );
+}
+
+const INPUT_LABELS: Record<string, string> = {
+  annual_payment_eur: "годишно",
+  value_eur: "стойност",
+  ratio: "съотношение",
+  threshold: "праг",
+  term_months: "срок",
+  threshold_months: "праг",
+  grace_period_months: "гратисен период",
+  level: "ниво",
+  bidder_count: "участници",
+  has_indexation: "индексация",
+  annual_payment: "годишно",
+  onetime_payment: "еднократно",
+  fields: "полета",
+};
+
+/** Входните числа на формулата — четими, не суров JSON. */
+function fmtInputs(inputs: Record<string, unknown>): string {
+  return Object.entries(inputs)
+    .map(([k, v]) => {
+      const label = INPUT_LABELS[k] ?? k;
+      let val: string;
+      if (k.endsWith("_eur")) val = fmtEur(v as number);
+      else if (k === "ratio" || k === "threshold")
+        val = fmtPercent(v as number);
+      else if (k.endsWith("_months")) val = `${v as number} мес.`;
+      else if (Array.isArray(v)) val = v.join(", ");
+      else val = String(v);
+      return `${label} = ${val}`;
+    })
+    .join("  ·  ");
 }
 
 export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
@@ -109,7 +171,11 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
               : ""}
             {c.status ? ` · ${c.status.toLowerCase()}` : ""}
           </div>
-          <h1 className="font-display text-2xl font-bold leading-tight text-balance">
+          <h1
+            className={`font-display font-bold leading-tight text-balance ${
+              c.title.length > 140 ? "text-lg" : "text-2xl"
+            }`}
+          >
             {c.title}
           </h1>
           <div className="mt-2.5 text-sm text-ink/85">
@@ -158,13 +224,13 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
           </div>
           <div>
             <b className="block font-mono text-base tabular-nums">
-              {c.annual_payment_raw ?? "—"}
+              {moneyShort(c.annual_payment_raw, c.annual_payment_eur)}
             </b>
             <span className="text-xs text-stone">годишно възнаграждение</span>
           </div>
           <div>
             <b className="block font-mono text-base tabular-nums">
-              {c.value_raw ?? "—"}
+              {moneyShort(c.value_raw, c.value_eur)}
             </b>
             <span className="text-xs text-stone">стойност на концесията</span>
           </div>
@@ -197,8 +263,8 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                         : ""}
                       .
                     </p>
-                    <code className="mt-1 block max-w-full overflow-x-auto rounded-[2px] border border-limestone bg-[#f4f5f0] px-2.5 py-1 font-mono text-[12.5px] whitespace-pre-wrap break-all tabular-nums text-ink/85">
-                      {JSON.stringify(inputs)}
+                    <code className="mt-1 block max-w-full rounded-[2px] border border-limestone bg-[#f4f5f0] px-2.5 py-1 font-mono text-[12.5px] break-words tabular-nums text-ink/85">
+                      {fmtInputs(inputs)}
                     </code>
                     <p className="mt-1 text-[13px] text-stone">
                       Индикаторът е аритметичен факт, не твърдение за нарушение.{" "}
@@ -237,7 +303,9 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
               <span className="block text-xs text-stone">
                 {KIND_LABELS[o.kind] ?? o.kind}
               </span>
-              <b className="font-medium">{o.description}</b>
+              <b className="block max-w-[60ch] font-medium break-words">
+                {o.description}
+              </b>
             </div>
           ))}
           {detail.objects.length === 0 && (
@@ -250,20 +318,14 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         <div className="grid gap-2.5 pb-2 sm:grid-cols-2">
           <Value
             label="Стойност на концесията"
-            value={
-              c["value_eur"] != null
-                ? `${c.value_raw} → ${fmtEur(c.value_eur)}`
-                : "—"
-            }
+            value={c.value_eur != null ? fmtEur(c.value_eur) : "—"}
             raw={c.value_raw}
             flag={c.value_flag}
           />
           <Value
             label="Годишно възнаграждение"
             value={
-              c["annual_payment_eur"] != null
-                ? `${c.annual_payment_raw} → ${fmtEur(c.annual_payment_eur)}`
-                : "—"
+              c.annual_payment_eur != null ? fmtEur(c.annual_payment_eur) : "—"
             }
             raw={c.annual_payment_raw}
             flag={c.annual_payment_flag}
@@ -271,8 +333,8 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
           <Value
             label="Еднократно възнаграждение"
             value={
-              c["onetime_payment_eur"] != null
-                ? `${c.onetime_payment_raw} → ${fmtEur(c.onetime_payment_eur)}`
+              c.onetime_payment_eur != null
+                ? fmtEur(c.onetime_payment_eur)
                 : "—"
             }
             raw={c.onetime_payment_raw}
@@ -320,7 +382,9 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                   className="text-water underline decoration-1 underline-offset-2"
                 >
                   {d.title ??
-                    (d.kind === "announcement" ? "Обявление" : "Документ")}{" "}
+                    (d.kind === "announcement"
+                      ? "Обявление"
+                      : `Документ ${i + 1}`)}{" "}
                   ↗
                 </a>
               </li>

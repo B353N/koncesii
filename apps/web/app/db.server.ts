@@ -37,7 +37,7 @@ export function getDb(): Database.Database | null {
         handle = undefined;
       }
     } catch {
-      handle.close();
+      handle?.close();
       handle = undefined;
     }
   }

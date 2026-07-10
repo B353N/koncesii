@@ -61,7 +61,7 @@ export function deriveFlags(db: Database.Database, date: string): number {
         add(c.id, "LOW_PAYMENT", "high", {
           annual_payment_eur: c.annual_payment_eur,
           value_eur: c.value_eur,
-          ratio: Math.round(ratio * 10000) / 10000,
+          ratio: Math.round(ratio * 1e6) / 1e6,
           threshold: 0.01,
         });
       }

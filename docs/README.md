@@ -12,6 +12,7 @@
 - [`core-scope.md`](core-scope.md) — доменен модел и речник на данните.
 - [`etl.md`](etl.md) — източниците, форматите им (проверени на живо) и pipeline-ът.
 - [`red-flags.md`](red-flags.md) — публичната методология на индикаторите за риск.
+- [`document-extraction.md`](document-extraction.md) — планът за извличане на срокове и такси от документите.
 
 ## Дизайн
 

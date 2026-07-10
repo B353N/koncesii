@@ -68,7 +68,7 @@ PDF extraction опашка.
   2. за нови/променени партиди: свали партида + обявления → R2 → парсни → staging
   3. data.egov.bg: listDatasets по таговете → обнови променените ресурси
   4. normalize → unify (dedup) → derive flags → precompute rollups → D1
-  5. integrity gate: hard asserts върху тоталите преди подмяна (по модела на СИГМА)
+  5. integrity gate: hard asserts върху тоталите преди подмяна
 ```
 
 Суровите файлове са immutable в R2 с датиран префикс — всяка версия на сайта е
@@ -76,7 +76,7 @@ PDF extraction опашка.
 
 ## Staging конвенция
 
-Всеки staging ред носи `source` префикс, по модела на СИГМА:
+Всеки staging ред носи `source` префикс:
 
 | Източник                  | `source` префикс                  |
 | ------------------------- | ---------------------------------- |

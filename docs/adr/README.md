@@ -6,7 +6,7 @@
 
 | ADR | Заглавие | Статус |
 | --- | --- | --- |
-| [0001](0001-reuse-sigma-stack.md) | Преизползване на стека и конвенциите на СИГМА | Прието |
+| [0001](0001-cloudflare-monorepo-stack.md) | Монорепо на pnpm + turbo върху Cloudflare | Прието |
 | [0002](0002-two-stage-ingest.md) | Двустепенно извличане: Python bootstrap + Worker refresh | Прието |
 | [0003](0003-nkr-wins-dedup.md) | НКР печели при dedup между източниците | Прието |
 | [0004](0004-map-rendering.md) | Карта като клиентски остров (MapLibre GL) | Предложено |

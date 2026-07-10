@@ -25,13 +25,13 @@ body:
     id: url
     attributes:
       label: Засегнат адрес (URL)
-      placeholder: https://sigma.midt.bg/contracts?…
+      placeholder: https://koncesii.com/concessions?…
   - type: dropdown
     id: area
     attributes:
       label: Къде се проявява
       options:
-        - Уеб (sigma.midt.bg)
+        - Уеб (koncesii.com)
         - ETL / обработка на данни
         - API / CSV / JSON експорт
         - Друго / не съм сигурен(на)

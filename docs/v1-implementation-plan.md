@@ -6,7 +6,7 @@
 ## Фаза 0 — скелет (this repo) ✅→
 
 - Монорепо скелет (pnpm + turbo), devcontainer, CI (gitleaks → lint → typecheck → test →
-  docs integrity), AGENTS.md/CLAUDE.md, шаблони. Копира се от СИГМА и се преименува.
+  docs integrity), AGENTS.md/CLAUDE.md, шаблони.
 - **Изход:** зелено CI върху празните пакети.
 
 ## Фаза 1 — данните (bootstrap)
@@ -22,8 +22,8 @@
 
 ## Фаза 2 — сайтът (read-only explorer)
 
-- `apps/web` (RR v7 SSR по СИГМА шаблона): начало, /concessions (+детайл), /grantors,
-  /companies (+cross-link към СИГМА по ЕИК), /search, CSV/JSON експорти, методология,
+- `apps/web` (RR v7 SSR): начало, /concessions (+детайл), /grantors,
+  /companies, /search, CSV/JSON експорти, методология,
   достъпност, robots/sitemap.
 - **Изход:** koncesii.com живее с пълните данни, без карта и без флагове.
 
@@ -42,7 +42,7 @@
 ## Фаза 5 — refresh автоматика
 
 - `apps/etl` Worker: седмичен diff по НКР експорта + data.egov.bg update, integrity gate,
-  blue/green D1 подмяна (по СИГМА ADR-0005).
+  blue/green D1 подмяна.
 - Решение за BG IP пътя (self-hosted runner във Варна или residential proxy) — ADR при
   избора.
 - **Изход:** сайтът се обновява сам; badge „данни към ДД.ММ".
@@ -50,7 +50,7 @@
 ## v2 (след стабилен v1)
 
 - Отчети за изпълнение (PDF extraction) → `ARREARS` флаг; МЕ плащания по находища; МТ
-  плажове; свързани лица (от слоя на СИГМА); AI асистент по СИГМА спецификацията.
+  плажове; слой „свързани лица"; AI асистент.
 
 ## Дефиниция на готово за v1
 

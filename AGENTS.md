@@ -2,14 +2,14 @@
 
 This file is the source of truth for repo conventions. Both Codex agents (which read it natively from cwd) and Claude agents (which load it via the sibling `CLAUDE.md` import) consume the same content.
 
-For project background, architecture, and scope, read the design docs in [docs/](docs/). For day-to-day commands and the intended layout, see [README.md](README.md). Koncesii is the sibling project of [midt-bg/sigma](https://github.com/midt-bg/sigma) — same conventions, same stack, shared civic-tech family; when in doubt, do what Sigma does.
+For project background, architecture, and scope, read the design docs in [docs/](docs/). For day-to-day commands and the intended layout, see [README.md](README.md).
 
 ## Repository model
 
 Single repo, trunk-based:
 
 ```
-koncesii/koncesii   ← origin; `main` is the only long-lived branch
+B353N/koncesii   ← origin; `main` is the only long-lived branch
 ```
 
 No `develop`, no `staging`. Maintainers with write access work on short-lived feature branches off `main`; external contributors fork and open PRs from their fork (see [CONTRIBUTING.md](CONTRIBUTING.md)). Either way, work merges back into `main` via PR.
@@ -37,15 +37,15 @@ No `develop`, no `staging`. Maintainers with write access work on short-lived fe
 ## Working directory and environment
 
 - The runtime cwd is the project root — `/workspaces/koncesii` inside the devcontainer.
-- Koncesii reuses Sigma's pnpm + turbo monorepo tech stack on Cloudflare (React Router v7 (SSR) on Workers, D1, Workers AI, Queues, KV, R2). Use the existing `pnpm`, `wrangler`, and `turbo` scripts — see [README.md](README.md).
+- Koncesii is a pnpm + turbo monorepo on Cloudflare (React Router v7 (SSR) on Workers, D1, Workers AI, Queues, KV, R2). Use the existing `pnpm`, `wrangler`, and `turbo` scripts — see [README.md](README.md).
 - The monorepo scaffold (`apps/`, `packages/`, workspace + lockfile) is still being established. If a script doesn't exist yet, say so rather than inventing one.
 - One-off bulk harvesters (Python) live in `tools/harvest/` and run **outside** the Workers runtime, from a Bulgarian IP — the registries block datacenter IPs. Never assume CI or a Worker can reach `nkr.government.bg` or `data.egov.bg` directly.
 - Run only the minimal tests needed to gain confidence in the change. Full release verification is reserved for explicit asks (release tickets, smoke tests).
 
 ## Data domain rules (project-specific)
 
-- **ЕИК is the join key.** Concessionaires key by ЕИК (9 or 13 digits) when valid, by normalized name otherwise — same convention as Sigma's `bidders`, so the cross-linking layer between the two datasets stays trivial.
-- **Never invent or "fix" registry values.** The source registries contain contradictions (BGN vs EUR duplicates, "Няма въведени данни", 2 300,81 лв. next to 4 500 лв. free text). Contradictions are *recorded and flagged*, not silently resolved. The `*_flag` column convention from Sigma applies.
+- **ЕИК is the join key.** Concessionaires key by ЕИК (9 or 13 digits) when valid, by normalized name otherwise — ЕИК is the stable national company identifier, so joins against external datasets stay trivial.
+- **Never invent or "fix" registry values.** The source registries contain contradictions (BGN vs EUR duplicates, "Няма въведени данни", 2 300,81 лв. next to 4 500 лв. free text). Contradictions are *recorded and flagged*, not silently resolved. Every parsed value carries a `*_flag` column recording its quality.
 - **Red flags are computed, deterministic, and publicly documented** in [docs/red-flags.md](docs/red-flags.md). A flag is a reproducible arithmetic fact ("annual payment is 0.6% of asset value over a 35-year term"), never an accusation. Copy that implies wrongdoing is a defect — file it as a bug.
 - **Every displayed number must be traceable to a source URL** (НКР партида, data.egov.bg ресурс, документ). If provenance is lost in a transformation, the transformation is wrong.
 - Monetary amounts are stored in **both original form and normalized EUR** (`amount_eur`), with the BGN→EUR fixed rate 1.95583 for pre-euro values; the conversion date and rule live in `docs/core-scope.md`.

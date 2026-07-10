@@ -12,13 +12,13 @@
 ## Фаза 1 — данните (bootstrap)
 
 - `tools/harvest/` (вече написани): пълен НКР скрейп (1434+222), data.egov.bg extraction,
-  качване в R2.
+  качване в snapshot хранилището на сървъра.
 - `packages/ingest`: парсерите като тествани TS модули (портват логиката от Python) —
   windows-1251 TSV, Раздел I–XI парсер, хедър-евристиките за общинските CSV-та.
 - `packages/db`: миграция `0000_init.sql` по [`core-scope.md`](core-scope.md), staging +
   domain + derived.
 - Стар регистър (nkrold) обхождане.
-- **Изход:** локален D1 с пълния единен модел; unify + dedup минават integrity gate.
+- **Изход:** локална SQLite база с пълния единен модел; unify + dedup минават integrity gate.
 
 ## Фаза 2 — сайтът (read-only explorer)
 
@@ -41,8 +41,8 @@
 
 ## Фаза 5 — refresh автоматика
 
-- `apps/etl` Worker: седмичен diff по НКР експорта + data.egov.bg update, integrity gate,
-  blue/green D1 подмяна.
+- `apps/etl` планиран job: седмичен diff по НКР експорта + data.egov.bg update, integrity
+  gate, атомарна подмяна на SQLite файла.
 - Решение за BG IP пътя (self-hosted runner във Варна или residential proxy) — ADR при
   избора.
 - **Изход:** сайтът се обновява сам; badge „данни към ДД.ММ".

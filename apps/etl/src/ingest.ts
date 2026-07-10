@@ -68,7 +68,8 @@ export function runIngest(
       console.log(
         `[ingest] export: ${nExport} реда, партиди: ${lots.length}, ` +
           `концесии: ${stats.concessions} (НКР ${stats.fromNkr}, egov ${stats.fromEgov}), ` +
-          `допълнени: ${stats.supplemented}, конфликти: ${stats.conflicts}, флагове: ${nFlags}`,
+          `допълнени: ${stats.supplemented}, конфликти: ${stats.conflicts}, ` +
+          `огледала прескочени: ${stats.mirrorsSkipped}, флагове: ${nFlags}`,
       );
     })();
 

@@ -15,20 +15,38 @@ import type { Snapshot } from "./snapshot";
  * тук отвъд парсването на формàта — тълкуването е в unify.
  */
 
-const REG_NUM_HEADER_RE = /номер.*партида|партиден.*номер|рег.*номер/i;
+const REG_NUM_HEADER_RE = /номер.*партида|партиден.*номер|рег.*номер|^номер$/i;
 
+/**
+ * Базовите редове идват от TSV експорта, когато го има, иначе от
+ * Search индекса (nkr_data/index/concessions.jsonl). Индексът носи и guid,
+ * който свързва реда директно с партидата — експортът на НКР от 07.2026
+ * връща 500, така че индексът е реалният път.
+ */
 export function stageNkrExport(db: Database.Database, snap: Snapshot): number {
-  if (!snap.exportTsv) return 0;
-  const { headers, rows } = parseNkrExport(snap.exportTsv);
-  const regNumHeader =
-    headers.find((h) => REG_NUM_HEADER_RE.test(h)) ?? headers[0] ?? "col_0";
   const insert = db.prepare(
     "INSERT INTO raw_nkr_export (source, reg_num, payload, fetched_at) VALUES (?, ?, ?, ?)",
   );
-  const source = `nkr:export:${snap.date}`;
   let n = 0;
-  for (const row of rows) {
-    const regNum = row[regNumHeader];
+
+  if (snap.exportTsv) {
+    const { headers, rows } = parseNkrExport(snap.exportTsv);
+    const regNumHeader =
+      headers.find((h) => REG_NUM_HEADER_RE.test(h)) ?? headers[0] ?? "col_0";
+    const source = `nkr:export:${snap.date}`;
+    for (const row of rows) {
+      const regNum = row[regNumHeader];
+      if (!regNum) continue;
+      insert.run(source, regNum, JSON.stringify(row), snap.date);
+      n++;
+    }
+    return n;
+  }
+
+  const source = `nkr:index:${snap.date}`;
+  for (const row of snap.indexRows) {
+    const regNumKey = Object.keys(row).find((k) => REG_NUM_HEADER_RE.test(k));
+    const regNum = regNumKey ? normText(row[regNumKey]) : "";
     if (!regNum) continue;
     insert.run(source, regNum, JSON.stringify(row), snap.date);
     n++;

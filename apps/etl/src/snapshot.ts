@@ -17,6 +17,8 @@ export interface Snapshot {
   /** Датиран етикет на снемането (YYYY-MM-DD) — влиза в source префиксите. */
   date: string;
   exportTsv: Uint8Array | null;
+  /** nkr_data/index/concessions.jsonl — редовете от Search обхождането (с guid). */
+  indexRows: Array<Record<string, string | null>>;
   /** guid → { partidaHtml, документи: име на файл → html } */
   lots: Map<string, { partidaHtml: string | null; docs: Map<string, string> }>;
   /** dataset_uri → { meta, ресурси: resource_uri → payload } */
@@ -27,9 +29,18 @@ export function loadSnapshot(dir: string, date: string): Snapshot {
   const snap: Snapshot = {
     date,
     exportTsv: null,
+    indexRows: [],
     lots: new Map(),
     egov: new Map(),
   };
+
+  const indexPath = join(dir, "nkr_data", "index", "concessions.jsonl");
+  if (existsSync(indexPath)) {
+    snap.indexRows = readFileSync(indexPath, "utf8")
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l) as Record<string, string | null>);
+  }
 
   for (const name of ["export_concessions_raw.tsv", "export_concessions.tsv"]) {
     const p = join(dir, "nkr_data", name);

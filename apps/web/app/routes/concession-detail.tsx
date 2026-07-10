@@ -12,11 +12,24 @@ import {
 import { getConcession } from "../queries.server";
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  const title =
-    loaderData && "detail" in loaderData
-      ? `${loaderData.detail.concession.title} — КОНЦЕСИИ`
-      : "Концесия — КОНЦЕСИИ";
-  return [{ title }];
+  const c =
+    loaderData && "detail" in loaderData ? loaderData.detail.concession : null;
+  return [
+    { title: c ? `${c.title} — КОНЦЕСИИ` : "Концесия — КОНЦЕСИИ" },
+    ...(c
+      ? [
+          {
+            name: "description",
+            content: `Концесия ${c.reg_num}: срок, възнаграждение, индикатори и документи — проследимо до официалния източник.`,
+          },
+          {
+            tagName: "link" as const,
+            rel: "canonical",
+            href: `https://koncesii.com/concessions/${encodeURIComponent(c.reg_num)}`,
+          },
+        ]
+      : []),
+  ];
 }
 
 export function loader({ params }: Route.LoaderArgs) {

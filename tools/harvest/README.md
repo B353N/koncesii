@@ -9,4 +9,4 @@ python3 nkr_scraper.py all                 # НКР: export + index + парти
 python3 egov_concessions_harvest.py all    # data.egov.bg: discover + fetch + normalize
 ```
 
-Резултатите (nkr_data/, data/) НЕ се комитват — качват се в R2 с датиран префикс.
+Резултатите (nkr_data/, data/) НЕ се комитват — качват се в snapshot хранилището на сървъра с датиран префикс.

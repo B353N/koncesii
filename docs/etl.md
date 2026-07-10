@@ -61,18 +61,19 @@ PDF extraction опашка.
 Стъпка A (bootstrap, ръчна, BG IP):
   tools/harvest/nkr_scraper.py all          → nkr_data/   (сурови HTML + parsed JSON)
   tools/harvest/egov_concessions_harvest.py → data/       (сурови JSON + normalized JSONL)
-  tools/harvest/upload_to_r2.py             → R2 bucket koncesii-raw/YYYY-MM-DD/…
+  pnpm harvest:upload                       → сървъра: /data/koncesii/snapshots/YYYY-MM-DD/…
+                                              (rsync през SSH, идемпотентно и възобновимо)
 
-Стъпка B (инкрементално, koncesii-etl Worker, cron):
+Стъпка B (инкрементално, планиран job apps/etl, cron):
   1. fetch НКР export (една заявка) през BG proxy → diff срещу последния snapshot
-  2. за нови/променени партиди: свали партида + обявления → R2 → парсни → staging
+  2. за нови/променени партиди: свали партида + обявления → snapshot → парсни → staging
   3. data.egov.bg: listDatasets по таговете → обнови променените ресурси
-  4. normalize → unify (dedup) → derive flags → precompute rollups → D1
-  5. integrity gate: hard asserts върху тоталите преди подмяна
+  4. normalize → unify (dedup) → derive flags → precompute rollups → нов koncesii.sqlite
+  5. integrity gate: hard asserts върху тоталите преди атомарната подмяна на файла
 ```
 
-Суровите файлове са immutable в R2 с датиран префикс — всяка версия на сайта е
-възпроизводима от суровината. **Сурови данни не се комитват в git.**
+Суровите файлове са immutable в snapshot хранилището на сървъра с датиран префикс — всяка
+версия на сайта е възпроизводима от суровината. **Сурови данни не се комитват в git.**
 
 ## Staging конвенция
 

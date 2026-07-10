@@ -37,9 +37,9 @@ No `develop`, no `staging`. Maintainers with write access work on short-lived fe
 ## Working directory and environment
 
 - The runtime cwd is the project root — `/workspaces/koncesii` inside the devcontainer.
-- Koncesii is a pnpm + turbo monorepo on Cloudflare (React Router v7 (SSR) on Workers, D1, Workers AI, Queues, KV, R2). Use the existing `pnpm`, `wrangler`, and `turbo` scripts — see [README.md](README.md).
+- Koncesii is a pnpm + turbo monorepo. Production runs on our own server via Coolify ([ADR-0005](docs/adr/0005-selfhosted-coolify.md)): `apps/web` is a Node SSR container reading a single SQLite database produced by the ingest pipeline; merging to `main` deploys automatically. Use the existing `pnpm` and `turbo` scripts — see [README.md](README.md).
 - The monorepo scaffold (`apps/`, `packages/`, workspace + lockfile) is still being established. If a script doesn't exist yet, say so rather than inventing one.
-- One-off bulk harvesters (Python) live in `tools/harvest/` and run **outside** the Workers runtime, from a Bulgarian IP — the registries block datacenter IPs. Never assume CI or a Worker can reach `nkr.government.bg` or `data.egov.bg` directly.
+- One-off bulk harvesters (Python) live in `tools/harvest/` and run **on a maintainer's machine**, from a Bulgarian IP — the registries block datacenter IPs. Never assume CI or the production server can reach `nkr.government.bg` or `data.egov.bg` directly.
 - Run only the minimal tests needed to gain confidence in the change. Full release verification is reserved for explicit asks (release tickets, smoke tests).
 
 ## Data domain rules (project-specific)
@@ -52,7 +52,7 @@ No `develop`, no `staging`. Maintainers with write access work on short-lived fe
 
 ## Things not to do
 
-- Do not commit secrets, `.env*` files, or anything in `.dev.vars`. Scraped raw HTML dumps and harvested datasets do **not** belong in git either — they go to R2 (see `docs/etl.md`).
+- Do not commit secrets or `.env*` files. Scraped raw HTML dumps and harvested datasets do **not** belong in git either — they go to the server's snapshot storage (see `docs/etl.md`).
 - Do not amend commits that have already been pushed.
 - Do not force-push to a branch someone else might be reading.
 - Do not delete branches you didn't create.

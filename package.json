@@ -17,22 +17,19 @@
     "check:docs": "node scripts/check-docs.mjs",
     "check:docs:test": "node --test scripts/check-docs.test.mjs",
     "setup": "node scripts/setup.mjs",
-    "deploy": "turbo run deploy",
     "start": "pnpm --filter web start"
   },
   "devDependencies": {
     "prettier": "^3.8.3",
     "turbo": "^2.9.14",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7",
-    "wrangler": "^4.93.1"
+    "vitest": "^4.1.7"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild",
-      "sharp",
-      "workerd"
+      "sharp"
     ]
   }
 }

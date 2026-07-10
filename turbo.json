@@ -12,9 +12,6 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
-    "test": {},
-    "deploy": {
-      "dependsOn": ["build"]
-    }
+    "test": {}
   }
 }

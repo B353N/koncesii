@@ -7,6 +7,7 @@ import {
   parseTerm,
 } from "ingest";
 import type { StagedLot } from "./staging";
+import { geocode, parseLocation } from "./geocode";
 
 /**
  * Unify: staging → единния модел, по правилото „НКР печели" (ADR-0003).
@@ -68,6 +69,7 @@ const ITEM_FIELDS: ReadonlyArray<readonly [string, RegExp]> = [
   ["grace_period", /гратисен/iu],
   ["indexation", /индексаци/iu],
   ["bidder_count", /брой\s+(на\s+)?(участници|оференти|кандидати)/iu],
+  ["location", /местонахождение/iu],
 ];
 
 /** Изменения/промени по договора не са първоначалните стойности. */
@@ -202,8 +204,9 @@ export function unify(
        @source, @source_url, @announcement_url, @fetched_at)`,
   );
   const insObject = db.prepare(
-    `INSERT INTO objects (id, concession_id, seq, description, kind, kind_raw, oblast, municipality, place)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO objects (id, concession_id, seq, description, kind, kind_raw,
+       oblast, municipality, place, lat, lon, geo_precision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insDocument = db.prepare(
     "INSERT INTO documents (concession_id, title, kind, url) VALUES (?, ?, ?, ?)",
@@ -351,6 +354,8 @@ export function unify(
     stats.concessions++;
     stats.fromNkr++;
 
+    const loc = parseLocation(facts["location"]);
+    const geo = geocode(loc);
     insObject.run(
       `obj:${id}:1`,
       id,
@@ -358,9 +363,12 @@ export function unify(
       title,
       classifyObjectKind(title),
       title,
-      null,
-      null,
-      null,
+      loc.oblast,
+      loc.municipality,
+      loc.place,
+      geo?.lat ?? null,
+      geo?.lon ?? null,
+      geo?.precision ?? null,
     );
 
     for (const link of lot?.fileLinks ?? []) {
@@ -539,6 +547,9 @@ export function unify(
         subject,
         classifyObjectKind(subject),
         subject,
+        null,
+        null,
+        null,
         null,
         null,
         null,

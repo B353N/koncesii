@@ -49,6 +49,44 @@ export function runIngest(
       const stats = unify(db, lots, date);
       const nFlags = deriveFlags(db, date);
 
+      // precompute: GeoJSON за картата (центроиди, приблизителни)
+      const points = db
+        .prepare<
+          [],
+          {
+            reg_num: string;
+            title: string;
+            kind: string;
+            lat: number;
+            lon: number;
+            geo_precision: string;
+          }
+        >(
+          `SELECT c.reg_num, c.title, o.kind, o.lat, o.lon, o.geo_precision
+           FROM objects o JOIN concessions c ON c.id = o.concession_id
+           WHERE o.lat IS NOT NULL ORDER BY c.reg_num`,
+        )
+        .all();
+      db.prepare(
+        "INSERT INTO rollups (key, payload, computed_at) VALUES ('map_geojson', ?, ?)",
+      ).run(
+        JSON.stringify({
+          type: "FeatureCollection",
+          features: points.map((p) => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+            properties: {
+              reg_num: p.reg_num,
+              title: p.title.length > 90 ? p.title.slice(0, 90) + "…" : p.title,
+              kind: p.kind,
+              precision: p.geo_precision,
+            },
+          })),
+        }),
+        date,
+      );
+      console.log(`[ingest] карта: ${points.length} гео-кодирани обекта`);
+
       // precompute: обобщението за началната страница
       report = integrityReport(db, date);
       db.prepare(

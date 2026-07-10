@@ -32,12 +32,32 @@ function csp(nonce: string): string {
   ].join("; ");
 }
 
+const CANONICAL_HOST = "koncesii.com";
+
 export default function handleRequest(
   request: Request,
   responseStatusCode: number,
   responseHeaders: Headers,
   routerContext: EntryContext,
 ) {
+  // Каноничен адрес: www.* и http (X-Forwarded-Proto зад проксито) →
+  // 301 към https://koncesii.com. Едно име, един протокол, за SEO и доверие.
+  const url = new URL(request.url);
+  const host = request.headers.get("host") ?? url.host;
+  const proto =
+    request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+  if (host !== CANONICAL_HOST || proto !== "https") {
+    // локалната разработка не се пренасочва
+    if (!host.startsWith("localhost") && !host.startsWith("127.")) {
+      return new Response(null, {
+        status: 301,
+        headers: {
+          Location: `https://${CANONICAL_HOST}${url.pathname}${url.search}`,
+        },
+      });
+    }
+  }
+
   const nonce = randomBytes(16).toString("base64");
   responseHeaders.set("Content-Security-Policy", csp(nonce));
   responseHeaders.set("X-Content-Type-Options", "nosniff");

@@ -54,9 +54,17 @@ export function parseMoney(rawInput: unknown): ParsedMoney {
     eur: null,
     flag: "missing",
   };
-  if (!raw || NO_DATA_RE.test(raw)) return none;
+  if (!raw) return none;
 
-  const m = MONEY_RE.exec(raw);
+  // Формулярите смесват стойност и празни подполета в един низ
+  // („Да Размер (BGN без ДДС): 685,13 лв. или Няма въведени данни Срок…").
+  // Парсваме само частта преди „Няма въведени данни" — число след фразата
+  // принадлежи на друго подполе.
+  const cutAt = raw.search(NO_DATA_RE);
+  const scope = cutAt === -1 ? raw : raw.slice(0, cutAt);
+  if (!scope.trim()) return none;
+
+  const m = MONEY_RE.exec(scope);
   if (!m || !m[1]) return none;
 
   const value = parseDecimal(m[1]);

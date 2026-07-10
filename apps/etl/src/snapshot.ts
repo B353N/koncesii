@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -54,6 +54,8 @@ export function loadSnapshot(dir: string, date: string): Snapshot {
   if (existsSync(htmlDir)) {
     for (const guid of readdirSync(htmlDir).sort()) {
       const lotDir = join(htmlDir, guid);
+      // прескачаме .DS_Store и други файлове — лотовете са директории
+      if (guid.startsWith(".") || !statSync(lotDir).isDirectory()) continue;
       const docs = new Map<string, string>();
       let partidaHtml: string | null = null;
       for (const f of readdirSync(lotDir).sort()) {
@@ -70,6 +72,7 @@ export function loadSnapshot(dir: string, date: string): Snapshot {
   if (existsSync(rawDir)) {
     for (const ds of readdirSync(rawDir).sort()) {
       const dsDir = join(rawDir, ds);
+      if (ds.startsWith(".") || !statSync(dsDir).isDirectory()) continue;
       const metaPath = join(dsDir, "_dataset.json");
       if (!existsSync(metaPath)) continue;
       const meta = JSON.parse(readFileSync(metaPath, "utf8")) as unknown;

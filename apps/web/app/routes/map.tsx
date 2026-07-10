@@ -58,7 +58,7 @@ function MapIsland() {
           center: [25.3, 42.75],
           zoom: 6.4,
           // журналистите правят screenshot-и на картата
-          preserveDrawingBuffer: true,
+          canvasContextAttributes: { preserveDrawingBuffer: true },
           style: {
             version: 8,
             sources: {

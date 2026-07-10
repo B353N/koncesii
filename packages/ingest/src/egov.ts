@@ -30,6 +30,28 @@ export const HEADER_MAP: ReadonlyArray<readonly [string, RegExp]> = [
   ["status", /статус|състояние/iu],
 ];
 
+/**
+ * Концедентът от метаданните на набора: полето source, когато е попълнено,
+ * иначе „Община X" от името на набора („Регистър на концесиите в Община
+ * Костенец" → „Община Костенец"). Име на регистър не е име на орган —
+ * при липса на извлечим орган концедентът остава празен (честно „—").
+ */
+export function extractGrantor(
+  source: string | undefined,
+  name: string | undefined,
+): string | null {
+  const src = normText(source);
+  if (src) return src;
+  const m = /(общин[аи]\s+[\p{L} .„"–-]+?)(?=\s*[,;()]|\s+\d{4}|$)/iu.exec(
+    normText(name),
+  );
+  if (!m || !m[1]) return null;
+  return m[1]
+    .toLowerCase()
+    .replace(/(^|\s)\p{L}/gu, (c) => c.toUpperCase())
+    .trim();
+}
+
 export interface HeaderMapping {
   /** индекс на колона → канонично поле */
   mapping: Map<number, string>;
@@ -121,7 +143,7 @@ export function normalizeResource(
   const { mapping, unmapped } = mapHeaders(headers);
   if (mapping.size === 0) return { records: [], unmapped };
 
-  const grantor = normText(dataset.source || dataset.name) || null;
+  const grantor = extractGrantor(dataset.source, dataset.name);
   const records: EgovRecord[] = [];
 
   for (const r of rows.slice(headerIdx + 1)) {

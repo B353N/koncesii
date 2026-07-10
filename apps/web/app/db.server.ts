@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import Database from "better-sqlite3";
 
@@ -10,6 +10,9 @@ import Database from "better-sqlite3";
  */
 let handle: Database.Database | null | undefined;
 let openedPath: string | null = null;
+let openedIno: bigint | null = null;
+let lastCheck = 0;
+const RECHECK_MS = 5000;
 
 function candidatePaths(): string[] {
   const env = process.env["KONCESII_DB"];
@@ -22,7 +25,23 @@ function candidatePaths(): string[] {
 }
 
 export function getDb(): Database.Database | null {
-  // При атомарна подмяна на файла inode-ът се сменя — преотваряме при нужда.
+  // При атомарна подмяна (mv) inode-ът се сменя, а старият handle сочи
+  // стария файл — проверяваме периодично и преотваряме при смяна.
+  const now = Date.now();
+  if (handle && openedPath && now - lastCheck > RECHECK_MS) {
+    lastCheck = now;
+    try {
+      const ino = statSync(openedPath, { bigint: true }).ino;
+      if (ino !== openedIno) {
+        handle.close();
+        handle = undefined;
+      }
+    } catch {
+      handle?.close();
+      handle = undefined;
+    }
+  }
+
   if (handle !== undefined) {
     if (handle === null && candidatePaths().some(existsSync))
       handle = undefined;
@@ -35,6 +54,8 @@ export function getDb(): Database.Database | null {
   }
   handle = new Database(path, { readonly: true, fileMustExist: true });
   openedPath = path;
+  openedIno = statSync(path, { bigint: true }).ino;
+  lastCheck = now;
   return handle;
 }
 

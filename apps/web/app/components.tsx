@@ -10,6 +10,24 @@ import type { ConcessionRow } from "./queries.server";
 
 /** Речникът на интерфейса — docs/design.md. */
 
+/** Синтетичен номер от общински ресурс (uuid#ред) не се показва суров. */
+const SYNTHETIC_REG_RE = /^[0-9a-f-]{30,}#\d+$/i;
+
+export function regNumLabel(regNum: string): string {
+  return SYNTHETIC_REG_RE.test(regNum) ? "общински регистър" : regNum;
+}
+
+/** Кратко представяне на годишното: суровото, ако е кратко; иначе EUR. */
+export function annualLabel(
+  raw: string | null,
+  eur: number | null,
+): { text: string; full: string | null; wrap: boolean } {
+  if (raw && raw.length <= 24) return { text: raw, full: null, wrap: false };
+  if (eur != null) return { text: fmtEur(eur), full: raw, wrap: false };
+  if (raw) return { text: raw.slice(0, 24) + "…", full: raw, wrap: false };
+  return { text: "—", full: null, wrap: false };
+}
+
 const HATCH: Record<string, string> = {
   high: "hatch-high border-oxide/50",
   medium: "hatch-med border-ochre/50",
@@ -141,27 +159,33 @@ export function ConcessionsTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="my-2 w-full border-collapse text-[13.5px]">
+      <table className="my-2 w-full table-fixed border-collapse text-[13.5px]">
         <thead>
           <tr className="border-b-[1.5px] border-ink text-left font-mono text-[11.5px] uppercase tracking-wider text-stone">
-            <th scope="col" className="py-2 pr-2 font-medium">
+            <th scope="col" className="w-[34%] py-2 pr-2 font-medium">
               Обект
             </th>
             {showGrantor && (
-              <th scope="col" className="py-2 pr-2 font-medium">
+              <th scope="col" className="w-[16%] py-2 pr-2 font-medium">
                 Концедент
               </th>
             )}
-            <th scope="col" className="py-2 pr-2 font-medium">
+            <th scope="col" className="w-[22%] py-2 pr-2 font-medium">
               Концесионер
             </th>
-            <th scope="col" className="py-2 pr-2 text-right font-medium">
+            <th
+              scope="col"
+              className="w-[10%] py-2 pr-2 text-right font-medium"
+            >
               Срок
             </th>
-            <th scope="col" className="py-2 pr-2 text-right font-medium">
+            <th
+              scope="col"
+              className="w-[13%] py-2 pr-2 text-right font-medium"
+            >
               Годишно
             </th>
-            <th scope="col" className="py-2 font-medium">
+            <th scope="col" className="w-[5%] py-2 font-medium">
               Инд.
             </th>
           </tr>
@@ -172,12 +196,13 @@ export function ConcessionsTable({
               <td className="py-2 pr-2">
                 <Link
                   to={`/concessions/${encodeURIComponent(r.reg_num)}`}
-                  className="text-water underline decoration-1 underline-offset-2"
+                  className="line-clamp-3 text-water underline decoration-1 underline-offset-2"
+                  title={r.title}
                 >
                   {r.title}
                 </Link>
-                <span className="block font-mono text-xs text-stone">
-                  {r.reg_num}
+                <span className="block truncate font-mono text-xs text-stone">
+                  {regNumLabel(r.reg_num)}
                 </span>
               </td>
               {showGrantor && (
@@ -198,12 +223,18 @@ export function ConcessionsTable({
                 {r.eik ? (
                   <Link
                     to={`/companies/${r.eik}`}
-                    className="text-ink hover:text-water"
+                    className="line-clamp-2 text-ink hover:text-water"
+                    title={r.concessionaire_name ?? undefined}
                   >
                     {r.concessionaire_name}
                   </Link>
                 ) : (
-                  (r.concessionaire_name ?? "—")
+                  <span
+                    className="line-clamp-2"
+                    title={r.concessionaire_name ?? undefined}
+                  >
+                    {r.concessionaire_name ?? "—"}
+                  </span>
                 )}
                 {r.eik && (
                   <span className="block font-mono text-xs text-stone">
@@ -214,8 +245,14 @@ export function ConcessionsTable({
               <td className="py-2 pr-2 text-right font-mono tabular-nums whitespace-nowrap">
                 {fmtMonths(r.term_months)}
               </td>
-              <td className="py-2 pr-2 text-right font-mono tabular-nums whitespace-nowrap">
-                {r.annual_payment_raw ?? fmtEur(r.annual_payment_eur)}
+              <td
+                className="py-2 pr-2 text-right font-mono tabular-nums"
+                title={
+                  annualLabel(r.annual_payment_raw, r.annual_payment_eur)
+                    .full ?? undefined
+                }
+              >
+                {annualLabel(r.annual_payment_raw, r.annual_payment_eur).text}
               </td>
               <td className="py-2">
                 <FlagMarks flags={r.flags} />

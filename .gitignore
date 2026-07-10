@@ -9,3 +9,4 @@ __pycache__/
 .turbo/
 .react-router/
 build/
+.venv/

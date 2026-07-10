@@ -17,11 +17,13 @@ export function fmtMonths(months: number | null | undefined): string {
 }
 
 export function fmtPercent(ratio: number): string {
+  const pct = ratio * 100;
   return (
     new Intl.NumberFormat("bg-BG", {
       minimumFractionDigits: 1,
-      maximumFractionDigits: 2,
-    }).format(ratio * 100) + "%"
+      // малките съотношения (0,003%) не бива да се закръглят до 0,0%
+      maximumFractionDigits: pct > 0 && pct < 0.1 ? 4 : 2,
+    }).format(pct) + "%"
   );
 }
 

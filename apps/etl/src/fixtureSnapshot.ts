@@ -80,4 +80,21 @@ export function buildFixtureSnapshot(dir: string): void {
     }),
   );
   cpSync(join(FIXTURES, "egov_resource.json"), join(dsDir, "res-001.json"));
+
+  // Огледало на НКР, качено като общински набор — реален случай от
+  // data.egov.bg (58 117 от 59 057 реда в harvest-а от 07.2026).
+  // Редовете са същите като res-001 и биха дублирали данни, ако филтърът
+  // в stageEgov не ги прескочи.
+  const mirrorDir = join(dir, "data", "raw", "nkr-ogledalo-smolyan");
+  mkdirSync(mirrorDir, { recursive: true });
+  writeFileSync(
+    join(mirrorDir, "_dataset.json"),
+    JSON.stringify({
+      uri: "nkr-ogledalo-smolyan",
+      name: "Национален концесионен регистър — извадка на Община Смолян",
+      source: "Община Смолян",
+      updated_at: "2026-05-14",
+    }),
+  );
+  cpSync(join(FIXTURES, "egov_resource.json"), join(mirrorDir, "res-002.json"));
 }

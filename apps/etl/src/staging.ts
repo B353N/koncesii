@@ -113,14 +113,29 @@ export function stageNkrLots(
   return lots;
 }
 
+/**
+ * Набори, които са огледала на самия НКР (общини качват националния регистър
+ * като свой набор). НКР го имаме от първа ръка — огледалата не влизат дори в
+ * staging (58 117 от 59 057 egov реда в harvest-а от 07.2026 са огледала и
+ * издуват сервиращата база), детерминистично по името на набора. Броят се
+ * пази и се отчита в ingest лога.
+ */
+const NKR_MIRROR_RE = /национален концесионен регистър/iu;
+
+export interface EgovStagingResult {
+  unmapped: Map<string, string[]>;
+  mirrorsSkipped: number;
+}
+
 export function stageEgov(
   db: Database.Database,
   snap: Snapshot,
-): Map<string, string[]> {
+): EgovStagingResult {
   const insert = db.prepare(
     "INSERT INTO raw_egov_rows (source, resource_uri, row_index, payload, fetched_at) VALUES (?, ?, ?, ?, ?)",
   );
-  const unmappedReport = new Map<string, string[]>();
+  const unmapped = new Map<string, string[]>();
+  let mirrorsSkipped = 0;
 
   for (const [dsUri, ds] of [...snap.egov].sort(([a], [b]) =>
     a.localeCompare(b),
@@ -131,14 +146,23 @@ export function stageEgov(
       source?: string;
       updated_at?: string;
     };
+    const isMirror = NKR_MIRROR_RE.test(normText(meta.name));
     for (const [resUri, payload] of [...ds.resources].sort(([a], [b]) =>
       a.localeCompare(b),
     )) {
-      const { records, unmapped } = normalizeResource(payload, meta, resUri);
-      if (unmapped.length > 0) {
-        unmappedReport.set(
+      const { records, unmapped: unmappedHeaders } = normalizeResource(
+        payload,
+        meta,
+        resUri,
+      );
+      if (isMirror) {
+        mirrorsSkipped += records.length;
+        continue;
+      }
+      if (unmappedHeaders.length > 0) {
+        unmapped.set(
           `${normText(meta.name) || dsUri} (${resUri})`,
-          unmapped,
+          unmappedHeaders,
         );
       }
       records.forEach((rec, i) => {
@@ -152,5 +176,5 @@ export function stageEgov(
       });
     }
   }
-  return unmappedReport;
+  return { unmapped, mirrorsSkipped };
 }

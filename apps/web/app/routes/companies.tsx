@@ -5,7 +5,19 @@ import { fmtEur } from "../format";
 import { getSummary, listCompanies } from "../queries.server";
 
 export function meta({}: Route.MetaArgs) {
-  return [{ title: "Компании — КОНЦЕСИИ" }];
+  return [
+    { title: "Компании — КОНЦЕСИИ" },
+    {
+      name: "description",
+      content:
+        "Концесионерите в България по ЕИК: кой какво държи, откога и срещу какво възнаграждение.",
+    },
+    {
+      tagName: "link",
+      rel: "canonical",
+      href: "https://koncesii.com/companies",
+    },
+  ];
 }
 
 export function loader({}: Route.LoaderArgs) {
@@ -24,7 +36,7 @@ export default function Companies({ loaderData }: Route.ComponentProps) {
       />
       <ExportLinks csvHref="/companies.csv" />
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13.5px]">
+        <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
           <thead>
             <tr className="border-b-[1.5px] border-ink text-left font-mono text-[11.5px] uppercase tracking-wider text-stone">
               <th scope="col" className="py-2 pr-2 font-medium">

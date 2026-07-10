@@ -4,7 +4,14 @@ import { ConcessionsTable, DataPending, PageTitle } from "../components";
 import { getSummary, listConcessions } from "../queries.server";
 
 export function meta({}: Route.MetaArgs) {
-  return [{ title: "Търсене — КОНЦЕСИИ" }];
+  return [
+    { title: "Търсене — КОНЦЕСИИ" },
+    {
+      name: "description",
+      content:
+        "Търсене по обект, компания, община или номер на партида във всички концесии в България.",
+    },
+  ];
 }
 
 export function loader({ request }: Route.LoaderArgs) {

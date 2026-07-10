@@ -12,6 +12,11 @@ export function meta({}: Route.MetaArgs) {
       content:
         "Публичната методология на индикаторите за риск: всеки флаг е възпроизводим аритметичен факт с явни прагове.",
     },
+    {
+      tagName: "link",
+      rel: "canonical",
+      href: "https://koncesii.com/methodology",
+    },
   ];
 }
 

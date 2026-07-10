@@ -40,6 +40,10 @@ export default function handleRequest(
   const nonce = randomBytes(16).toString("base64");
   responseHeaders.set("Content-Security-Policy", csp(nonce));
   responseHeaders.set("X-Content-Type-Options", "nosniff");
+  responseHeaders.set(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains",
+  );
   responseHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
   return new Promise((resolve, reject) => {

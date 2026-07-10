@@ -18,6 +18,7 @@ export function meta({}: Route.MetaArgs) {
       content:
         "Концесиите с индикатори за риск по публична, детерминистична методология. Всеки индикатор е възпроизводим аритметичен факт.",
     },
+    { tagName: "link", rel: "canonical", href: "https://koncesii.com/flags" },
   ];
 }
 
@@ -88,7 +89,7 @@ export default function Flags({ loaderData }: Route.ComponentProps) {
       </div>
       <ExportLinks csvHref={`/flags.csv${code ? `?code=${code}` : ""}`} />
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13.5px]">
+        <table className="w-full min-w-[700px] border-collapse text-[13.5px]">
           <thead>
             <tr className="border-b-[1.5px] border-ink text-left font-mono text-[11.5px] uppercase tracking-wider text-stone">
               <th scope="col" className="py-2 pr-2 font-medium">

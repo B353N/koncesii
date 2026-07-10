@@ -30,12 +30,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon.png" type="image/png" sizes="64x64" />
+        <meta property="og:site_name" content="КОНЦЕСИИ" />
+        <meta property="og:type" content="website" />
+        <meta property="og:locale" content="bg_BG" />
+        <meta property="og:image" content="https://koncesii.com/og.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
         <Meta />
         <Links />
       </head>
       <body className="bg-paper font-sans text-ink antialiased">
         <header className="border-b border-limestone">
-          <div className="mx-auto flex h-14 max-w-5xl flex-wrap items-center gap-x-6 gap-y-1 px-5">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-0 px-5 py-2.5 sm:h-14 sm:flex-nowrap sm:py-0">
             <Link
               to="/"
               className="font-display text-lg font-bold tracking-[0.09em] text-ink no-underline"
@@ -43,7 +52,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               КОНЦЕСИИ<span className="font-normal text-water-br">.com</span>
             </Link>
             <nav
-              className="flex flex-wrap gap-x-4 text-[13.5px]"
+              className="-mx-5 order-last flex w-[calc(100%+2.5rem)] gap-x-4 overflow-x-auto px-5 pb-1 text-[13.5px] whitespace-nowrap sm:order-none sm:mx-0 sm:w-auto sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
               aria-label="Основна навигация"
             >
               {NAV.map(([to, label]) => (

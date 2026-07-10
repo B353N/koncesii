@@ -14,6 +14,7 @@ export function meta({}: Route.MetaArgs) {
       content:
         "Гео-кодираните обекти на концесии в България: язовири, плажове, находища — върху карта, с връзка към партидата на всяка сделка.",
     },
+    { tagName: "link", rel: "canonical", href: "https://koncesii.com/map" },
   ];
 }
 

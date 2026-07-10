@@ -13,6 +13,13 @@ import type { Route } from "./+types/root";
 import { useNonce } from "./nonce";
 import "./app.css";
 
+/** Google Analytics 4 — само в production, за да не шуми dev трафикът. */
+const GA_ID = "G-GT7K4WV5PM";
+const GA_INIT = `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_ID}');`;
+
 const NAV = [
   ["/", "Начало"],
   ["/concessions", "Концесии"],
@@ -41,6 +48,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="twitter:card" content="summary_large_image" />
         <Meta />
         <Links />
+        {import.meta.env.PROD && (
+          <>
+            <script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+            />
+            <script
+              nonce={nonce}
+              dangerouslySetInnerHTML={{ __html: GA_INIT }}
+            />
+          </>
+        )}
       </head>
       <body className="bg-paper font-sans text-ink antialiased">
         <header className="border-b border-limestone">

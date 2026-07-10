@@ -5,3 +5,4 @@ dist/
 .turbo/
 .wrangler/
 tools/harvest/
+packages/ingest/fixtures/

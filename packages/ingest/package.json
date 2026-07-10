@@ -4,13 +4,16 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "shared": "workspace:*"
+    "shared": "workspace:*",
+    "node-html-parser": "^7.0.1"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
-    "@types/node": "^22"
+    "@types/node": "^22",
+    "vitest": "^4.1.7"
   }
 }

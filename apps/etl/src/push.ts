@@ -78,10 +78,15 @@ function main() {
     process.exit(1);
   }
 
-  // 3. атомарна подмяна
-  execFileSync("ssh", [host, "mv", "-f", tmpPath, remotePath], {
-    stdio: "inherit",
-  });
+  // 3. предишната версия остава като .bak, после атомарна подмяна
+  execFileSync(
+    "ssh",
+    [
+      host,
+      `[ -f '${remotePath}' ] && cp -f '${remotePath}' '${remotePath}.bak'; mv -f '${tmpPath}' '${remotePath}'`,
+    ],
+    { stdio: "inherit" },
+  );
   console.log(
     `[push] публикувано: ${host}:${remotePath} (sha256 ${localSha.slice(0, 12)}…)`,
   );

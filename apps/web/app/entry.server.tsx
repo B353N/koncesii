@@ -18,9 +18,12 @@ function csp(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    "connect-src 'self'",
+    // OSM тайловете за картата са единственият външен източник (ADR-0004)
+    "img-src 'self' data: blob: https://tile.openstreetmap.org",
+    "font-src 'self' data:",
+    // MapLibre тегли тайловете през fetch → connect-src, не img-src
+    "connect-src 'self' https://tile.openstreetmap.org",
+    "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

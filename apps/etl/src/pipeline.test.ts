@@ -10,11 +10,12 @@ import {
   FIXTURE_DOC_GUID as DOC_GUID,
   FIXTURE_LOT_GUID as LOT_GUID,
 } from "./fixtureSnapshot";
-import { runIngest } from "./ingest";
+import { runIngest, type IngestResult } from "./ingest";
 import { verifyReport, type IntegrityReport } from "./report";
 
 let work: string;
 let snapshotDir: string;
+let result: IngestResult;
 let report: IntegrityReport;
 let dbPath: string;
 
@@ -25,7 +26,8 @@ beforeAll(() => {
   buildFixtureSnapshot(snapshotDir);
 
   dbPath = join(work, "koncesii.sqlite");
-  report = runIngest(snapshotDir, DATE, dbPath).report;
+  result = runIngest(snapshotDir, DATE, dbPath);
+  report = result.report;
 });
 
 afterAll(() => rmSync(work, { recursive: true, force: true }));
@@ -129,12 +131,15 @@ test("integrity отчетът се сверява срещу самата ба�
   db.close();
 });
 
-test("огледалата на НКР от data.egov.bg се прескачат, не се дублират", () => {
+test("огледалата на НКР от data.egov.bg не влизат дори в staging", () => {
+  // фикстурата има огледален набор „Национален концесионен регистър…“ с
+  // 2 реда — stageEgov ги прескача (в реалния harvest от 10.07.2026 те са
+  // 58 117 от 59 057 egov реда и издуват сервиращата база), но броят се
+  // отчита. Редовете не създават нито raw_egov_rows, нито концесии.
+  expect(result.mirrorsSkipped).toBe(2);
+  expect(report.tables["raw_egov_rows"]).toBe(2); // само истинският набор
+
   const db = new Database(dbPath, { readonly: true });
-  // фикстурата няма огледални набори → 0 прескочени, но правилото се
-  // проверява срещу името: редове от набор „Национален концесионен регистър…“
-  // не бива да създават записи (проверено с реалния harvest от 10.07.2026:
-  // 58 117 от 59 057 egov реда са огледала).
   const egovCount = db
     .prepare("SELECT COUNT(*) AS n FROM concessions WHERE source = 'egov'")
     .get() as { n: number };

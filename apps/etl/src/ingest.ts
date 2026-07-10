@@ -28,6 +28,7 @@ const BUILD_DIR = join(
 export interface IngestResult {
   report: IntegrityReport;
   unmappedHeaders: Record<string, string[]>;
+  mirrorsSkipped: number;
 }
 
 export function runIngest(
@@ -40,12 +41,12 @@ export function runIngest(
 
   try {
     let report!: IntegrityReport;
-    let unmapped!: Map<string, string[]>;
+    let egov!: ReturnType<typeof stageEgov>;
 
     db.transaction(() => {
       const nExport = stageNkrExport(db, snap);
       const lots = stageNkrLots(db, snap);
-      unmapped = stageEgov(db, snap);
+      egov = stageEgov(db, snap);
       const stats = unify(db, lots, date);
       const nFlags = deriveFlags(db, date);
 
@@ -107,12 +108,16 @@ export function runIngest(
         `[ingest] export: ${nExport} реда, партиди: ${lots.length}, ` +
           `концесии: ${stats.concessions} (НКР ${stats.fromNkr}, egov ${stats.fromEgov}), ` +
           `допълнени: ${stats.supplemented}, конфликти: ${stats.conflicts}, ` +
-          `огледала прескочени: ${stats.mirrorsSkipped}, ` +
+          `огледала прескочени: ${egov.mirrorsSkipped}, ` +
           `празни egov реда: ${stats.egovSkippedEmpty}, флагове: ${nFlags}`,
       );
     })();
 
-    return { report, unmappedHeaders: Object.fromEntries(unmapped) };
+    return {
+      report,
+      unmappedHeaders: Object.fromEntries(egov.unmapped),
+      mirrorsSkipped: egov.mirrorsSkipped,
+    };
   } finally {
     db.close();
   }

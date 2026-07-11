@@ -4,6 +4,11 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { isbot } from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
 import { ServerRouter, type EntryContext } from "react-router";
+import {
+  markdownResponse,
+  renderMarkdown,
+  wantsMarkdown,
+} from "./markdown.server";
 import { NonceContext } from "./nonce";
 
 const STREAM_TIMEOUT = 10_000;
@@ -57,6 +62,21 @@ export default function handleRequest(
       });
     }
   }
+
+  // Markdown for Agents: Accept: text/markdown → markdown изглед на същия
+  // URL. HTML остава по подразбиране; и двата варианта носят Vary: Accept.
+  if (wantsMarkdown(request)) {
+    const md = renderMarkdown(url);
+    if (md) return markdownResponse(md);
+  }
+  responseHeaders.set("Vary", "Accept");
+  // RFC 8288: къде са машинночетимите ресурси (RFC 9727 api-catalog)
+  responseHeaders.set(
+    "Link",
+    '</.well-known/api-catalog>; rel="api-catalog", ' +
+      '</openapi.json>; rel="service-desc", ' +
+      '</methodology>; rel="service-doc"',
+  );
 
   const nonce = randomBytes(16).toString("base64");
   responseHeaders.set("Content-Security-Policy", csp(nonce));

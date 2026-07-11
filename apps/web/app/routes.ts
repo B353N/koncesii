@@ -20,4 +20,12 @@ export default [
   route("methodology", "routes/methodology.tsx"),
   route("robots.txt", "routes/robots.ts"),
   route("sitemap.xml", "routes/sitemap.ts"),
+  route("healthz", "routes/healthz.ts"),
+  route("openapi.json", "routes/openapi.ts"),
+  route(".well-known/api-catalog", "routes/api-catalog.ts"),
+  route(".well-known/agent-skills/index.json", "routes/agent-skills-index.ts"),
+  route(
+    ".well-known/agent-skills/koncesii-data/SKILL.md",
+    "routes/agent-skill-data.ts",
+  ),
 ] satisfies RouteConfig;

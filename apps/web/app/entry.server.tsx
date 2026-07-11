@@ -4,7 +4,11 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { isbot } from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
 import { ServerRouter, type EntryContext } from "react-router";
-import { markdownResponse, renderMarkdown, wantsMarkdown } from "./markdown.server";
+import {
+  markdownResponse,
+  renderMarkdown,
+  wantsMarkdown,
+} from "./markdown.server";
 import { NonceContext } from "./nonce";
 
 const STREAM_TIMEOUT = 10_000;

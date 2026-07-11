@@ -141,7 +141,10 @@ function mdConcessionDetail(regNum: string): string | null {
             ? `${d.concessionaire.name}${d.concessionaire.eik ? ` (ЕИК ${d.concessionaire.eik})` : ""}`
             : "—",
         ],
-        ["Срок", `${c.term_raw ?? "—"} → ${fmtMonths(c.term_months)} (${c.term_flag})`],
+        [
+          "Срок",
+          `${c.term_raw ?? "—"} → ${fmtMonths(c.term_months)} (${c.term_flag})`,
+        ],
         ["Стойност", money(c.value_raw, c.value_eur, c.value_flag)],
         [
           "Еднократно възнаграждение",
@@ -206,7 +209,9 @@ function mdConcessionDetail(regNum: string): string | null {
     ``,
     `- Първичен: ${c.source_url}`,
     ...(c.announcement_url ? [`- Обявление: ${c.announcement_url}`] : []),
-    ...d.documents.map((doc) => `- ${doc.title ?? doc.kind ?? "документ"}: ${doc.url}`),
+    ...d.documents.map(
+      (doc) => `- ${doc.title ?? doc.kind ?? "документ"}: ${doc.url}`,
+    ),
     ``,
     `Машинночетимо: [JSON](${BASE}/concessions/${encodeURIComponent(c.reg_num)}/json)`,
   );

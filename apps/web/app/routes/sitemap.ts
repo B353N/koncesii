@@ -1,4 +1,9 @@
-import { allRegNums, getSummary } from "../queries.server";
+import {
+  allRegNums,
+  getSummary,
+  listCompanies,
+  listGrantors,
+} from "../queries.server";
 
 const BASE = "https://koncesii.com";
 const STATIC = [
@@ -17,6 +22,13 @@ export function loader() {
   const urls = [
     ...STATIC.map((p) => `${BASE}${p}`),
     ...allRegNums().map((r) => `${BASE}/concessions/${encodeURIComponent(r)}`),
+    ...listGrantors().map(
+      (g) => `${BASE}/grantors/${encodeURIComponent(g.slug)}`,
+    ),
+    // страница има само компания с ЕИК (/companies/:eik)
+    ...listCompanies()
+      .filter((c) => c.eik)
+      .map((c) => `${BASE}/companies/${encodeURIComponent(c.eik!)}`),
   ];
   const entry = (u: string) =>
     `  <url><loc>${u}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`;

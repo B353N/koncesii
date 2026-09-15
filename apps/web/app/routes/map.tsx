@@ -5,6 +5,11 @@ import { KIND_LABELS } from "../format";
 import { getDb } from "../db.server";
 import { getSummary } from "../queries.server";
 import "maplibre-gl/dist/maplibre-gl.css";
+// maplibre-gl 6 е само ESM и не вгражда worker-а като blob: - Vite го
+// бъндълва като самостоятелен файл (?worker&url) и го подаваме през
+// setWorkerUrl преди първата карта. Същият origin → покрива се от
+// worker-src 'self' в CSP (entry.server.tsx).
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -52,8 +57,9 @@ function MapIsland() {
     let cancelled = false;
 
     import("maplibre-gl")
-      .then(({ default: maplibregl }) => {
+      .then((maplibregl) => {
         if (cancelled || !container.current) return;
+        maplibregl.setWorkerUrl(maplibreWorkerUrl);
         map = new maplibregl.Map({
           container: container.current,
           center: [25.3, 42.75],

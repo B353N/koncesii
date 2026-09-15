@@ -1,43 +1,20 @@
-import {
-  allRegNums,
-  getSummary,
-  listCompanies,
-  listGrantors,
-} from "../queries.server";
+import { getSummary } from "../queries.server";
+import { BASE, SECTIONS, XML_HEADERS } from "./sitemap-section";
 
-const BASE = "https://koncesii.com";
-const STATIC = [
-  "",
-  "/concessions",
-  "/grantors",
-  "/companies",
-  "/map",
-  "/flags",
-  "/search",
-  "/methodology",
-];
-
+/**
+ * Resource route: /sitemap.xml — sitemap index, който сочи към по една
+ * карта на секция (/sitemap-<section>.xml). Разделянето дава на Search
+ * Console видимост „открити / индексирани" по тип страница и позволява
+ * Google да препрочита само променената секция.
+ */
 export function loader() {
   const lastmod = getSummary()?.data_date;
-  const urls = [
-    ...STATIC.map((p) => `${BASE}${p}`),
-    ...allRegNums().map((r) => `${BASE}/concessions/${encodeURIComponent(r)}`),
-    ...listGrantors().map(
-      (g) => `${BASE}/grantors/${encodeURIComponent(g.slug)}`,
-    ),
-    // страница има само компания с ЕИК (/companies/:eik)
-    ...listCompanies()
-      .filter((c) => c.eik)
-      .map((c) => `${BASE}/companies/${encodeURIComponent(c.eik!)}`),
-  ];
-  const entry = (u: string) =>
-    `  <url><loc>${u}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`;
+  const entry = (s: string) =>
+    `  <sitemap><loc>${BASE}/sitemap-${s}.xml</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</sitemap>`;
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    urls.map(entry).join("\n") +
-    `\n</urlset>\n`;
-  return new Response(xml, {
-    headers: { "Content-Type": "application/xml; charset=utf-8" },
-  });
+    `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    SECTIONS.map(entry).join("\n") +
+    `\n</sitemapindex>\n`;
+  return new Response(xml, { headers: XML_HEADERS });
 }

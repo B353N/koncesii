@@ -77,6 +77,7 @@ pnpm db:push
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" https://koncesii.com/          # 200
-curl -s https://koncesii.com/sitemap.xml | head -3                     # urlset
+curl -s https://koncesii.com/sitemap.xml | head -3                     # sitemapindex
+curl -s https://koncesii.com/sitemap-concessions.xml | grep -c "<loc>"  # брой партиди
 curl -sI https://koncesii.com/ | grep -i content-security-policy      # строг CSP
 ```

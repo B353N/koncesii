@@ -20,6 +20,18 @@ export default [
   route("methodology", "routes/methodology.tsx"),
   route("robots.txt", "routes/robots.ts"),
   route("sitemap.xml", "routes/sitemap.ts"),
+  route("sitemap-pages.xml", "routes/sitemap-section.ts", {
+    id: "sitemap-pages",
+  }),
+  route("sitemap-concessions.xml", "routes/sitemap-section.ts", {
+    id: "sitemap-concessions",
+  }),
+  route("sitemap-grantors.xml", "routes/sitemap-section.ts", {
+    id: "sitemap-grantors",
+  }),
+  route("sitemap-companies.xml", "routes/sitemap-section.ts", {
+    id: "sitemap-companies",
+  }),
   route("healthz", "routes/healthz.ts"),
   route("openapi.json", "routes/openapi.ts"),
   route(".well-known/api-catalog", "routes/api-catalog.ts"),

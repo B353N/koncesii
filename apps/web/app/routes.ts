@@ -4,8 +4,10 @@ export default [
   index("routes/home.tsx"),
   route("concessions", "routes/concessions.tsx"),
   route("concessions.csv", "routes/concessions-csv.ts"),
-  route("concessions/:regNum", "routes/concession-detail.tsx"),
-  route("concessions/:regNum/json", "routes/concession-json.ts"),
+  route("concessions/:slug", "routes/concession-detail.tsx"),
+  route("concessions/:slug/json", "routes/concession-json.ts"),
+  // Стари адреси, в които "/" от партидния номер е станал нов сегмент
+  route("concessions/*", "routes/concession-legacy.ts"),
   route("grantors", "routes/grantors.tsx"),
   route("grantors.csv", "routes/grantors-csv.ts"),
   route("grantors/:slug", "routes/grantor-detail.tsx"),

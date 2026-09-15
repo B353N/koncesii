@@ -1,9 +1,10 @@
 import {
-  allRegNums,
+  allConcessionSlugs,
   getSummary,
   listCompanies,
   listGrantors,
 } from "../queries.server";
+import { concessionHref } from "../slug";
 
 export const BASE = "https://koncesii.com";
 export const SECTIONS = [
@@ -38,9 +39,7 @@ function urlsFor(section: Section): string[] {
     case "pages":
       return PAGES.map((p) => `${BASE}${p}`);
     case "concessions":
-      return allRegNums().map(
-        (r) => `${BASE}/concessions/${encodeURIComponent(r)}`,
-      );
+      return allConcessionSlugs().map((s) => `${BASE}${concessionHref(s)}`);
     case "grantors":
       return listGrantors().map(
         (g) => `${BASE}/grantors/${encodeURIComponent(g.slug)}`,

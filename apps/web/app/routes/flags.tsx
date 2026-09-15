@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/flags";
+import { concessionHref } from "../slug";
 import {
   DataPending,
   ExportLinks,
@@ -114,7 +115,7 @@ export default function Flags({ loaderData }: Route.ComponentProps) {
               >
                 <td className="py-2.5 pr-2">
                   <Link
-                    to={`/concessions/${encodeURIComponent(r.reg_num)}`}
+                    to={concessionHref(r.slug)}
                     className="line-clamp-3 text-water underline decoration-1 underline-offset-2"
                     title={r.title}
                   >

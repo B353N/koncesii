@@ -7,6 +7,7 @@ import {
   SEVERITY_LABELS,
 } from "./format";
 import type { ConcessionRow } from "./queries.server";
+import { concessionHref } from "./slug";
 
 /** Речникът на интерфейса — docs/design.md. */
 
@@ -195,7 +196,7 @@ export function ConcessionsTable({
             <tr key={r.reg_num} className="border-b border-limestone align-top">
               <td className="py-2 pr-2">
                 <Link
-                  to={`/concessions/${encodeURIComponent(r.reg_num)}`}
+                  to={concessionHref(r.slug)}
                   className="line-clamp-3 text-water underline decoration-1 underline-offset-2"
                   title={r.title}
                 >

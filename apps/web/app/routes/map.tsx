@@ -166,6 +166,7 @@ function MapIsland() {
             if (!f) return;
             const p = f.properties as {
               reg_num: string;
+              slug?: string;
               title: string;
               kind: string;
               precision: string;
@@ -173,7 +174,7 @@ function MapIsland() {
             const el = document.createElement("div");
             el.className = "font-sans text-[13px] leading-snug";
             el.innerHTML =
-              `<a href="/concessions/${encodeURIComponent(p.reg_num)}" class="text-water underline">` +
+              `<a href="/concessions/${encodeURIComponent(p.slug ?? p.reg_num)}" class="text-water underline">` +
               `${escapeHtml(p.title)}</a>` +
               `<div class="mt-1 text-stone">${escapeHtml(kindLabel(p.kind))} · ` +
               `${p.precision === "municipality" ? "приблизително (община)" : "приблизително (нас. място)"}</div>`;

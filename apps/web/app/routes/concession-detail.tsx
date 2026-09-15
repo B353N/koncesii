@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, redirect } from "react-router";
 import type { Route } from "./+types/concession-detail";
 import { FlagBadge, Prov } from "../components";
 import {
@@ -9,11 +9,13 @@ import {
   fmtPercent,
   KIND_LABELS,
 } from "../format";
-import { getConcession } from "../queries.server";
+import { getConcession, resolveConcession } from "../queries.server";
+import { concessionHref } from "../slug";
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  const c =
-    loaderData && "detail" in loaderData ? loaderData.detail.concession : null;
+  const detail =
+    loaderData && "detail" in loaderData ? loaderData.detail : null;
+  const c = detail?.concession ?? null;
   return [
     { title: c ? `${c.title} — КОНЦЕСИИ` : "Концесия — КОНЦЕСИИ" },
     ...(c
@@ -25,7 +27,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
           {
             tagName: "link" as const,
             rel: "canonical",
-            href: `https://koncesii.com/concessions/${encodeURIComponent(c.reg_num)}`,
+            href: `https://koncesii.com${concessionHref(detail!.slug)}`,
           },
         ]
       : []),
@@ -33,7 +35,11 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export function loader({ params }: Route.LoaderArgs) {
-  const detail = getConcession(params.regNum);
+  const hit = resolveConcession(params.slug);
+  if (!hit) throw new Response("Not Found", { status: 404 });
+  // Суров номер или отрязан на "#" адрес → каноничният slug.
+  if (hit.slug !== params.slug) throw redirect(concessionHref(hit.slug), 301);
+  const detail = getConcession(hit.reg_num);
   if (!detail) throw new Response("Not Found", { status: 404 });
 
   return { detail };
@@ -417,9 +423,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         {c["announcement_url"] != null && (
           <Prov href={c.announcement_url}>Обявление</Prov>
         )}
-        <Prov href={`/concessions/${encodeURIComponent(c.reg_num)}/json`}>
-          JSON изглед
-        </Prov>
+        <Prov href={`${concessionHref(detail.slug)}/json`}>JSON изглед</Prov>
         <span className="ml-auto">снето на {c.fetched_at}</span>
       </div>
     </>

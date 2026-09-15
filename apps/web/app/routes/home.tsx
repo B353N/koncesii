@@ -1,5 +1,6 @@
 import { Form, Link } from "react-router";
 import type { Route } from "./+types/home";
+import { concessionHref } from "../slug";
 import { DataPending } from "../components";
 import { fmtMonths, fmtPercent, KIND_LABELS } from "../format";
 import {
@@ -115,7 +116,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 <tr key={c.reg_num} className="border-t border-limestone">
                   <td className="py-2 pr-2">
                     <Link
-                      to={`/concessions/${encodeURIComponent(c.reg_num)}`}
+                      to={concessionHref(c.slug)}
                       className="line-clamp-2 text-water underline decoration-1 underline-offset-2"
                       title={c.title}
                     >
@@ -146,7 +147,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 <tr key={c.reg_num} className="border-t border-limestone">
                   <td className="py-2 pr-2">
                     <Link
-                      to={`/concessions/${encodeURIComponent(c.reg_num)}`}
+                      to={concessionHref(c.slug)}
                       className="line-clamp-2 text-water underline decoration-1 underline-offset-2"
                       title={c.title}
                     >

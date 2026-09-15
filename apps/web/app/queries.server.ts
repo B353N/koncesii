@@ -1,4 +1,6 @@
+import type Database from "better-sqlite3";
 import { getDb } from "./db.server";
+import { buildSlugIndex, type SlugIndex } from "./slug";
 
 /**
  * Всички заявки на сайта. Строго read-only, само bound параметри —
@@ -15,6 +17,8 @@ export interface Summary {
 
 export interface ConcessionRow {
   reg_num: string;
+  /** URL slug на партидата (виж slug.ts); адресът е /concessions/<slug>. */
+  slug: string;
   title: string;
   status: string | null;
   grantor_name: string | null;
@@ -49,6 +53,80 @@ const LIST_FROM = `FROM concessions c
   LEFT JOIN concessionaires co ON co.id = c.concessionaire_id
   LEFT JOIN objects o ON o.concession_id = c.id AND o.seq = 1`;
 const LIST_SQL = `SELECT ${LIST_COLS} ${LIST_FROM}`;
+
+/** Редовете от LIST_SQL без slug - той се добавя от withSlugs(). */
+type ListRow = Omit<ConcessionRow, "slug">;
+
+/**
+ * Индексът номер ↔ slug се строи веднъж за отворената база (WeakMap по
+ * handle: при атомарна подмяна на файла getDb() връща нов handle и
+ * индексът се престроява).
+ */
+const slugIndexes = new WeakMap<Database.Database, SlugIndex>();
+function slugIndex(db: Database.Database): SlugIndex {
+  let idx = slugIndexes.get(db);
+  if (!idx) {
+    idx = buildSlugIndex(
+      db
+        .prepare<[], { reg_num: string }>("SELECT reg_num FROM concessions")
+        .all()
+        .map((r) => r.reg_num),
+    );
+    slugIndexes.set(db, idx);
+  }
+  return idx;
+}
+
+function withSlugs<T extends { reg_num: string }>(
+  db: Database.Database,
+  rows: T[],
+): Array<T & { slug: string }> {
+  const idx = slugIndex(db);
+  return rows.map((r) => ({ ...r, slug: idx.slugOf(r.reg_num) }));
+}
+
+/** Slug за суров партиден номер. */
+export function concessionSlug(regNum: string): string {
+  const db = getDb();
+  return db ? slugIndex(db).slugOf(regNum) : regNum;
+}
+
+/** Всички slug-ове (за sitemap), в сортиран ред на номерата. */
+export function allConcessionSlugs(): string[] {
+  const db = getDb();
+  return db ? slugIndex(db).slugs() : [];
+}
+
+/**
+ * Разпознава сегмента от /concessions/<x>: каноничен slug, суров партиден
+ * номер (стар адрес → 301) или номер, отрязан на "#" от търсачка, ако е
+ * еднозначен. Връща null, ако няма такава партида.
+ */
+export function resolveConcession(
+  param: string,
+): { reg_num: string; slug: string } | null {
+  const db = getDb();
+  if (!db) return null;
+  const idx = slugIndex(db);
+  const bySlug = idx.regNumOf(param);
+  if (bySlug) return { reg_num: bySlug, slug: param };
+  const exists = db
+    .prepare<[string], { reg_num: string }>(
+      "SELECT reg_num FROM concessions WHERE reg_num = ?",
+    )
+    .get(param);
+  if (exists) return { reg_num: param, slug: idx.slugOf(param) };
+  const truncated = db
+    .prepare<[string], { reg_num: string }>(
+      "SELECT reg_num FROM concessions WHERE reg_num LIKE ? ESCAPE '\\' LIMIT 2",
+    )
+    .all(param.replace(/[\\%_]/g, (ch) => `\\${ch}`) + "#%");
+  if (truncated.length === 1) {
+    const reg = truncated[0]!.reg_num;
+    return { reg_num: reg, slug: idx.slugOf(reg) };
+  }
+  return null;
+}
 
 export function getSummary(): Summary | null {
   const db = getDb();
@@ -101,11 +179,14 @@ export function listConcessions(f: ListFilters): {
       )
       .get(params)?.n ?? 0;
 
-  const rows = db
-    .prepare<[Record<string, string | number>], ConcessionRow>(
-      `${LIST_SQL}${cond} ORDER BY c.reg_num LIMIT @limit OFFSET @offset`,
-    )
-    .all({ ...params, limit: f.limit ?? 50, offset: f.offset ?? 0 });
+  const rows = withSlugs(
+    db,
+    db
+      .prepare<[Record<string, string | number>], ListRow>(
+        `${LIST_SQL}${cond} ORDER BY c.reg_num LIMIT @limit OFFSET @offset`,
+      )
+      .all({ ...params, limit: f.limit ?? 50, offset: f.offset ?? 0 }),
+  );
 
   return { rows, total };
 }
@@ -157,6 +238,8 @@ export interface PaymentRow {
 
 export interface ConcessionDetail {
   concession: ConcessionFull;
+  /** URL slug на партидата; адресът е /concessions/<slug>. */
+  slug: string;
   grantor: { id: string; name: string } | null;
   concessionaire: { id: string; name: string; eik: string | null } | null;
   objects: ObjectRow[];
@@ -193,6 +276,7 @@ export function getConcession(regNum: string): ConcessionDetail | null {
 
   return {
     concession,
+    slug: slugIndex(db).slugOf(regNum),
     grantor,
     concessionaire,
     objects: db
@@ -288,11 +372,14 @@ export function getCompany(eik: string) {
     >("SELECT id, name, eik, address FROM concessionaires WHERE eik = ?")
     .get(eik);
   if (!company) return null;
-  const concessions = db
-    .prepare<[string], ConcessionRow>(
-      `${LIST_SQL} WHERE co.id = ? ORDER BY c.reg_num`,
-    )
-    .all(company.id);
+  const concessions = withSlugs(
+    db,
+    db
+      .prepare<[string], ListRow>(
+        `${LIST_SQL} WHERE co.id = ? ORDER BY c.reg_num`,
+      )
+      .all(company.id),
+  );
   return { company, concessions };
 }
 
@@ -307,22 +394,24 @@ export function listFlagged(code?: string | null): FlaggedRow[] {
   const codeCond = code
     ? "AND EXISTS (SELECT 1 FROM flags fx WHERE fx.concession_id = c.id AND fx.code = @code)"
     : "";
-  return db
-    .prepare<[Record<string, string>], FlaggedRow>(
-      `${LIST_SQL}
+  return withSlugs(
+    db,
+    db
+      .prepare<[Record<string, string>], ListRow>(
+        `${LIST_SQL}
        WHERE EXISTS (SELECT 1 FROM flags f WHERE f.concession_id = c.id) ${codeCond}
        ORDER BY (SELECT COUNT(*) FROM flags f WHERE f.concession_id = c.id) DESC, c.reg_num`,
-    )
-    .all(code ? { code } : {})
-    .map((r) => {
-      const codes = getDb()!
-        .prepare<[string], { code: string }>(
-          "SELECT code FROM flags WHERE concession_id = (SELECT id FROM concessions WHERE reg_num = ?) ORDER BY code",
-        )
-        .all(r.reg_num)
-        .map((x) => x.code);
-      return { ...r, flag_codes: codes.join(","), flag_count: codes.length };
-    });
+      )
+      .all(code ? { code } : {}),
+  ).map((r) => {
+    const codes = getDb()!
+      .prepare<[string], { code: string }>(
+        "SELECT code FROM flags WHERE concession_id = (SELECT id FROM concessions WHERE reg_num = ?) ORDER BY code",
+      )
+      .all(r.reg_num)
+      .map((x) => x.code);
+    return { ...r, flag_codes: codes.join(","), flag_count: codes.length };
+  });
 }
 
 export function listFlagCodes(): Array<{ code: string; n: number }> {
@@ -348,11 +437,14 @@ export function kindCounts(): Array<{ kind: string; n: number }> {
 export function topByTerm(limit: number): ConcessionRow[] {
   const db = getDb();
   if (!db) return [];
-  return db
-    .prepare<[number], ConcessionRow>(
-      `${LIST_SQL} WHERE c.term_months IS NOT NULL ORDER BY c.term_months DESC, c.reg_num LIMIT ?`,
-    )
-    .all(limit);
+  return withSlugs(
+    db,
+    db
+      .prepare<[number], ListRow>(
+        `${LIST_SQL} WHERE c.term_months IS NOT NULL ORDER BY c.term_months DESC, c.reg_num LIMIT ?`,
+      )
+      .all(limit),
+  );
 }
 
 export function lowestPaymentRatio(
@@ -360,23 +452,15 @@ export function lowestPaymentRatio(
 ): Array<ConcessionRow & { ratio: number }> {
   const db = getDb();
   if (!db) return [];
-  return db
-    .prepare<[number], ConcessionRow & { ratio: number }>(
-      `SELECT ${LIST_COLS}, (c.annual_payment_eur / c.value_eur) AS ratio
+  return withSlugs(
+    db,
+    db
+      .prepare<[number], ListRow & { ratio: number }>(
+        `SELECT ${LIST_COLS}, (c.annual_payment_eur / c.value_eur) AS ratio
        ${LIST_FROM}
        WHERE c.annual_payment_eur IS NOT NULL AND c.value_eur > 0
        ORDER BY ratio ASC, c.reg_num LIMIT ?`,
-    )
-    .all(limit);
-}
-
-export function allRegNums(): string[] {
-  const db = getDb();
-  if (!db) return [];
-  return db
-    .prepare<[], { reg_num: string }>(
-      "SELECT reg_num FROM concessions ORDER BY reg_num",
-    )
-    .all()
-    .map((r) => r.reg_num);
+      )
+      .all(limit),
+  );
 }

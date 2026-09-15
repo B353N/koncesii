@@ -57,16 +57,17 @@ const SPEC = {
         responses: CSV_RESPONSE,
       },
     },
-    "/concessions/{regNum}/json": {
+    "/concessions/{slug}/json": {
       get: {
         summary:
           "Пълните данни на една концесия: стойности с флагове за качество, обекти, документи, плащания, индикатори и източници",
         parameters: [
           {
-            name: "regNum",
+            name: "slug",
             in: "path",
             required: true,
-            description: "партиден номер от НКР, напр. O-000123",
+            description:
+              "slug на партидата - номерът от НКР с „/“, „#“ и интервали, заменени с „-“ (напр. O-000123, 221-72-07.10.2020); суровият номер също се приема и прави 301 към slug адреса",
             schema: { type: "string" },
           },
         ],

@@ -28,7 +28,7 @@ Machine-readable spec: https://koncesii.com/openapi.json
 | Endpoint | What it returns |
 | --- | --- |
 | \`GET /concessions.csv\` | all concessions; filters: \`kind\`, \`status\`, \`flagged=1\`, \`q\` |
-| \`GET /concessions/{regNum}/json\` | full record of one concession incl. sources |
+| \`GET /concessions/{slug}/json\` | full record of one concession incl. sources; \`slug\` is the reg number with \`/\`, \`#\` and spaces replaced by \`-\` (the page URL); the raw reg number is accepted and 301-redirects |
 | \`GET /grantors.csv\` | granting authorities with concession counts |
 | \`GET /companies.csv\` | concessionaire companies keyed by ЕИК |
 | \`GET /flags.csv\` | concessions with risk indicators; filter: \`code\` |

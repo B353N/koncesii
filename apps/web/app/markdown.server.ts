@@ -9,6 +9,7 @@ import {
 import {
   getCompany,
   getConcession,
+  resolveConcession,
   getGrantor,
   getSummary,
   kindCounts,
@@ -19,6 +20,7 @@ import {
   listGrantors,
   type ConcessionRow,
 } from "./queries.server";
+import { concessionHref } from "./slug";
 
 /**
  * Markdown за агенти: заявка с Accept: text/markdown получава markdown
@@ -55,7 +57,7 @@ function concessionTable(rows: ConcessionRow[]): string {
   return table(
     ["Партида", "Обект", "Концедент", "Концесионер", "Срок", "Годишно (EUR)"],
     rows.map((r) => [
-      `[${r.reg_num}](${BASE}/concessions/${encodeURIComponent(r.reg_num)})`,
+      `[${r.reg_num}](${BASE}${concessionHref(r.slug)})`,
       r.title,
       r.grantor_name,
       r.concessionaire_name,
@@ -113,8 +115,9 @@ function mdConcessions(url: URL, heading: string): string {
   );
 }
 
-function mdConcessionDetail(regNum: string): string | null {
-  const d = getConcession(regNum);
+function mdConcessionDetail(param: string): string | null {
+  const hit = resolveConcession(param);
+  const d = hit ? getConcession(hit.reg_num) : null;
   if (!d) return null;
   const c = d.concession;
   const money = (
@@ -213,7 +216,7 @@ function mdConcessionDetail(regNum: string): string | null {
       (doc) => `- ${doc.title ?? doc.kind ?? "документ"}: ${doc.url}`,
     ),
     ``,
-    `Машинночетимо: [JSON](${BASE}/concessions/${encodeURIComponent(c.reg_num)}/json)`,
+    `Машинночетимо: [JSON](${BASE}${concessionHref(d.slug)}/json)`,
   );
   return lines.join("\n");
 }

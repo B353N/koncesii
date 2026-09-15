@@ -15,6 +15,10 @@
 
 ## Деплой на кода
 
+Билд стъпките са фиксирани в [`nixpacks.toml`](../nixpacks.toml): инсталацията е
+`pnpm install --frozen-lockfile --prod=false`, защото Coolify подава
+`NPM_CONFIG_PRODUCTION=true` и иначе pnpm прескача dev пакетите, нужни за билда.
+
 **Мърдж към `main` = деплой.** GitHub webhook задейства Coolify, който билдва
 (nixpacks: `pnpm i --frozen-lockfile` → `pnpm build` → `pnpm start`) и подменя
 контейнера. `main` е защитен: промени влизат само през PR със зелен CI.

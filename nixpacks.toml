@@ -1,0 +1,11 @@
+# Билд конфигурация за Coolify (nixpacks). Виж docs/deploy.md.
+#
+# Coolify v4 подава NPM_CONFIG_PRODUCTION=true към билда, при което pnpm
+# прескача devDependencies (turbo, @react-router/dev) и билдът пада с
+# "react-router: not found". Инсталацията е явна и винаги с dev пакети -
+# те са нужни само за билда, runtime образът стартира с pnpm start.
+[phases.install]
+cmds = [
+  "npm install -g corepack@0.24.1 && corepack enable",
+  "pnpm install --frozen-lockfile --prod=false",
+]

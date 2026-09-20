@@ -123,6 +123,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 Индикатори за риск — методология
               </Link>
             </span>
+            <span>
+              Изработка на сайта:{" "}
+              <a
+                className="text-water underline underline-offset-2"
+                href="https://prowebsite.bg/"
+                title="ProWebsite.bg - изработка на уеб сайтове и онлайн магазини"
+                target="_blank"
+                rel="noopener"
+              >
+                ProWebsite.bg - изработка на уеб сайтове
+              </a>
+            </span>
           </div>
         </footer>
 

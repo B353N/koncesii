@@ -81,7 +81,8 @@ if (!has("--skip-harvest")) {
 }
 
 run("качване на снапшота", "pnpm", ["harvest:upload", "--date", date]);
-run("ingest", "pnpm", ["ingest", "--local", "tools/harvest", "--date", date]);
+// пътят се разрешава спрямо apps/etl, затова е абсолютен
+run("ingest", "pnpm", ["ingest", "--local", HARVEST, "--date", date]);
 run("публикуване", "pnpm", ["db:push"]);
 
 log(`refresh ${date} готов · лог: ${logPath}`);

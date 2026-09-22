@@ -75,8 +75,8 @@
 
 Файл: `apps/web/app/routes/sitemap-section.ts`.
 
-- `lastmod` на партида = `max(updated_at на партидата, data_date)`. Изисква колона `updated_at` или дата на последния документ в `concessions` (виж 3.1). Докато я няма, оставяме `data_date`, но **само в sitemap index**, не на всеки URL (един и същ `lastmod` на 2 050 URL е шум, който Google игнорира).
-- Разделяме `sitemap-concessions.xml` на две: партиди със статус "Открита" и "Приключена". Дава на Google сигнал къде да започне.
+- `lastmod` на партида = `changed_at`: датата на снапшота, в който съдържанието ѝ за последно се е променило. Изчислява се при ingest чрез хеш на показваното съдържание и сверка с предишната база (`content_hash`, `changed_at`). Страниците, които се менят с всяко обновяване, получават `data_date`; статичните (методологията) остават без `lastmod`.
+- ~~Разделяне на `sitemap-concessions.xml` по статус.~~ Отхвърлено: вече подадените в Search Console карти щяха да дадат грешка, а URL-ите щяха да се дублират между двете. Реалният сигнал е `lastmod`, а той вече е верен.
 - Проверка в GSC > Sitemaps: "Last read" се обновява и няма грешки.
 
 Критерий за готово за фаза 1: GSC > Links > Internal links показва стотици, а не 5; sitemap-ите съдържат kind страниците; canonical на страница 2 сочи към себе си.
@@ -157,7 +157,7 @@ Google дава приоритет на сайтове, които се пром
 ### 3.2 Автоматичен refresh (Фаза 5 от v1 плана)
 
 - Седмичен cron на машина с BG IP, която пуска harvest и качва снапшота; сървърът пуска ingest и `db:push`. Това е вече планирано в [v1-implementation-plan.md](v1-implementation-plan.md); тук е зависимост за SEO.
-- След всеки успешен push: пингваме `https://www.google.com/ping?sitemap=https://koncesii.com/sitemap.xml` (Google го поддържа ограничено, но е безплатно) и (по избор) IndexNow за Bing/Yandex с ключ в `.well-known`.
+- След всеки успешен push: `db:push` известява **IndexNow** (Bing, Yandex, Seznam, Naver) за променените адреси. Google **няма** такъв механизъм - ping endpoint-ът за sitemap е спрян през 2023 г.; там работи `lastmod`, който вече идва от `changed_at`.
 
 ### 3.3 Страница "Промени"
 

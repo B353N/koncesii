@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 import Database from "better-sqlite3";
+import { changedUrls, indexNowKey, pingIndexNow } from "./indexnow";
 import { verifyReport, type IntegrityReport } from "./report";
 
 /**
@@ -25,7 +26,7 @@ function arg(name: string, fallback: string): string {
   return v && !v.startsWith("--") ? v : fallback;
 }
 
-function main() {
+async function main() {
   const dbPath = arg("--db", join(ROOT, "build/koncesii.sqlite"));
   const reportPath = arg("--report", join(ROOT, "build/ingest-report.json"));
   const host = process.env["KONCESII_SSH_HOST"] ?? "imprya";
@@ -90,6 +91,29 @@ function main() {
   console.log(
     `[push] публикувано: ${host}:${remotePath} (sha256 ${localSha.slice(0, 12)}…)`,
   );
+
+  // 4. известяване на търсачките за променените адреси (IndexNow).
+  // Google няма такъв механизъм - за него работи lastmod в sitemap-а.
+  // Провал тук не отменя публикацията: базата вече е на сървъра.
+  if (process.argv.includes("--no-ping")) return;
+  const key = indexNowKey();
+  if (!key) {
+    console.log("[push] IndexNow: няма ключ - известяването е прескочено");
+    return;
+  }
+  const urls = changedUrls(dbPath, expected.snapshot_date);
+  if (urls.length === 0) {
+    console.log("[push] IndexNow: няма променени адреси за известяване");
+    return;
+  }
+  const res = await pingIndexNow(urls, key);
+  if (res.error) {
+    console.warn(`[push] IndexNow: неуспешно известяване — ${res.error}`);
+  } else {
+    console.log(
+      `[push] IndexNow: ${res.sent} адреса известени (HTTP ${res.status})`,
+    );
+  }
 }
 
-main();
+await main();

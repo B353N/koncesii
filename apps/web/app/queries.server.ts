@@ -139,6 +139,79 @@ export function getSummary(): Summary | null {
   return row ? (JSON.parse(row.payload) as Summary) : null;
 }
 
+/**
+ * Има ли базата колоните за свежест (content_hash / changed_at). Стара
+ * база без тях не бива да чупи сайта - sitemap-ът просто остава без
+ * lastmod, а „Промени" показва празно състояние.
+ */
+const freshnessSupport = new WeakMap<Database.Database, boolean>();
+function hasFreshness(db: Database.Database): boolean {
+  let ok = freshnessSupport.get(db);
+  if (ok === undefined) {
+    ok =
+      (db
+        .prepare<[], { n: number }>(
+          "SELECT COUNT(*) AS n FROM pragma_table_info('concessions') WHERE name = 'changed_at'",
+        )
+        .get()?.n ?? 0) > 0;
+    freshnessSupport.set(db, ok);
+  }
+  return ok;
+}
+
+/** Дата на последна реална промяна по партида (slug → YYYY-MM-DD). */
+export function concessionLastmod(): Map<string, string> {
+  const out = new Map<string, string>();
+  const db = getDb();
+  if (!db || !hasFreshness(db)) return out;
+  const idx = slugIndex(db);
+  for (const row of db
+    .prepare<[], { reg_num: string; changed_at: string }>(
+      "SELECT reg_num, changed_at FROM concessions WHERE changed_at IS NOT NULL",
+    )
+    .iterate()) {
+    out.set(idx.slugOf(row.reg_num), row.changed_at);
+  }
+  return out;
+}
+
+export interface ChangedRow extends ConcessionRow {
+  changed_at: string;
+  /** true, когато партидата се появява за първи път в тази дата. */
+  is_new: number;
+}
+
+/** Партидите, променени най-скоро - захранва страницата „Промени". */
+export function recentlyChanged(limit = 60): ChangedRow[] {
+  const db = getDb();
+  if (!db || !hasFreshness(db)) return [];
+  return withSlugs(
+    db,
+    db
+      .prepare<[number], ListRow & { changed_at: string; is_new: number }>(
+        `SELECT ${LIST_COLS}, c.changed_at,
+                (c.changed_at = (SELECT MIN(changed_at) FROM concessions)) AS is_new
+         ${LIST_FROM}
+         WHERE c.changed_at IS NOT NULL
+         ORDER BY c.changed_at DESC, c.reg_num
+         LIMIT ?`,
+      )
+      .all(limit),
+  );
+}
+
+/** Датите с промени и броят партиди за всяка - за „Промени" и lastmod. */
+export function changeDates(): Array<{ changed_at: string; n: number }> {
+  const db = getDb();
+  if (!db || !hasFreshness(db)) return [];
+  return db
+    .prepare<[], { changed_at: string; n: number }>(
+      `SELECT changed_at, COUNT(*) AS n FROM concessions
+       WHERE changed_at IS NOT NULL GROUP BY changed_at ORDER BY changed_at DESC`,
+    )
+    .all();
+}
+
 export function listConcessions(f: ListFilters): {
   rows: ConcessionRow[];
   total: number;

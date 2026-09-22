@@ -57,9 +57,55 @@ pnpm ingest --snapshot ГГГГ-ММ-ДД     # или --local tools/harvest --d
 pnpm db:push
 ```
 
+Или накратко, целият цикъл в една команда (същите четири стъпки, с лог в
+`build/refresh-ГГГГ-ММ-ДД.log`):
+
+```bash
+pnpm refresh                      # днешна дата; --skip-harvest пропуска стъпка 1
+```
+
 Сайтът засича новия файл без рестарт. Rollback: предишният `koncesii.sqlite`
 се пази като `.bak` на сървъра преди подмяна (или се ребилдва от който и да е
 снапшот — всяка версия е възпроизводима).
+
+### Седмично обновяване
+
+Harvest-ът **не може** да върви на сървъра: регистрите режат datacenter адреси,
+затова цикълът се пуска от машина на поддържащия, с българско IP. На macOS —
+launchd агент, който буди `pnpm refresh` всяка неделя в 03:00:
+
+```xml
+<!-- ~/Library/LaunchAgents/com.koncesii.refresh.plist -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.koncesii.refresh</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string><string>-lc</string>
+    <string>cd ~/Claude/Projects/koncesii &amp;&amp; pnpm refresh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>3</integer></dict>
+  <key>RunAtLoad</key><false/>
+</dict></plist>
+```
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.koncesii.refresh.plist
+```
+
+Защо седмично: регистрите се менят бавно, а обхождането е учтиво (1 заявка/сек,
+часове). По-често не носи нови данни, но товари чужда инфраструктура.
+
+След публикуване `db:push` известява IndexNow (Bing, Yandex, Seznam) за
+променените адреси. Ключът е публичен по проектиране: това е файлът
+`apps/web/public/<ключ>.txt`, чието име е самият ключ - търсачката го чете
+оттам, за да провери, че известието идва от домейна. Затова стои като статичен
+файл, а не в кода, където изглежда като изтекла тайна и вдига секрет-скенера.
+`KONCESII_INDEXNOW_KEY` го замества, ако е зададен. Google няма такъв механизъм — за него работи `lastmod` в
+sitemap-а, който идва от `changed_at` (виж [`etl.md`](etl.md)).
 
 ## Достъп и тайни
 

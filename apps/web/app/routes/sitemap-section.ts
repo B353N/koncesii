@@ -1,5 +1,7 @@
 import {
   allConcessionSlugs,
+  concessionLastmod,
+  getSummary,
   listCompanies,
   listGrantors,
 } from "../queries.server";
@@ -24,6 +26,12 @@ type Section = (typeof SECTIONS)[number];
  * Статичните страници. /search е с noindex и нарочно липсва — URL в
  * sitemap + noindex е противоречив сигнал за Google.
  */
+/**
+ * Страници, които се менят с всяко обновяване на данните. Извън списъка
+ * остават статичните (методологията) - те се менят само с PR.
+ */
+const STATIC_PAGES = new Set(["/methodology"]);
+
 const PAGES = [
   "",
   "/concessions",
@@ -32,24 +40,47 @@ const PAGES = [
   "/companies",
   "/map",
   "/flags",
+  "/changes",
   "/methodology",
 ];
 
-function urlsFor(section: Section): string[] {
+interface SitemapEntry {
+  loc: string;
+  /** Дата на последна реална промяна; липсва, ако не я знаем. */
+  lastmod?: string | undefined;
+}
+
+function urlsFor(section: Section): SitemapEntry[] {
+  const dataDate = getSummary()?.data_date;
   switch (section) {
     case "pages":
-      return PAGES.map((p) => `${BASE}${p}`);
-    case "concessions":
-      return allConcessionSlugs().map((s) => `${BASE}${concessionHref(s)}`);
+      return PAGES.map((p) => ({
+        loc: `${BASE}${p}`,
+        // статичните страници не се менят с данните
+        lastmod: STATIC_PAGES.has(p) ? undefined : dataDate,
+      }));
+    case "concessions": {
+      // lastmod на партида = датата, в която съдържанието ѝ се е променило
+      // (apps/etl/src/changes.ts). Еднаква дата на 2000 URL е шум.
+      const lastmod = concessionLastmod();
+      return allConcessionSlugs().map((s) => ({
+        loc: `${BASE}${concessionHref(s)}`,
+        lastmod: lastmod.get(s),
+      }));
+    }
     case "grantors":
-      return listGrantors().map(
-        (g) => `${BASE}/grantors/${encodeURIComponent(g.slug)}`,
-      );
+      return listGrantors().map((g) => ({
+        loc: `${BASE}/grantors/${encodeURIComponent(g.slug)}`,
+        lastmod: dataDate,
+      }));
     case "companies":
       // страница има само компания с ЕИК (/companies/:eik)
       return listCompanies()
         .filter((c) => c.eik)
-        .map((c) => `${BASE}/companies/${encodeURIComponent(c.eik!)}`);
+        .map((c) => ({
+          loc: `${BASE}/companies/${encodeURIComponent(c.eik!)}`,
+          lastmod: dataDate,
+        }));
   }
 }
 
@@ -63,10 +94,8 @@ export function loader({ request }: { request: Request }) {
   const section = SECTIONS.find((s) => s === m?.[1]);
   if (!section) return new Response("Not found", { status: 404 });
 
-  // Един и същи lastmod на 2000 URL е шум, който Google игнорира - датата
-  // на снапшота стои в sitemap index-а, а на ниво URL ще влезе реалната
-  // дата на промяна по партидата, когато я има в базата.
-  const entry = (u: string) => `  <url><loc>${u}</loc></url>`;
+  const entry = (e: SitemapEntry) =>
+    `  <url><loc>${e.loc}</loc>${e.lastmod ? `<lastmod>${e.lastmod}</lastmod>` : ""}</url>`;
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +

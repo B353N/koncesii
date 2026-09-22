@@ -77,7 +77,7 @@ if (!has("--skip-harvest")) {
     cwd: HARVEST,
   });
 } else {
-  log("— harvest прескочен (--skip-harvest)");
+  log("- harvest прескочен (--skip-harvest)");
 }
 
 run("качване на снапшота", "pnpm", ["harvest:upload", "--date", date]);

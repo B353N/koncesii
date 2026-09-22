@@ -1,6 +1,14 @@
 import { Link, redirect } from "react-router";
 import type { Route } from "./+types/concession-detail";
-import { FlagBadge, Prov } from "../components";
+import {
+  Breadcrumbs,
+  FlagBadge,
+  Prov,
+  RelatedList,
+  regNumLabel,
+  type Crumb,
+} from "../components";
+import { kindHref } from "../concessions-list";
 import {
   CONCESSION_KIND_LABELS,
   FLAG_DESCRIPTIONS,
@@ -9,7 +17,11 @@ import {
   fmtPercent,
   KIND_LABELS,
 } from "../format";
-import { getConcession, resolveConcession } from "../queries.server";
+import {
+  getConcession,
+  relatedConcessions,
+  resolveConcession,
+} from "../queries.server";
 import { concessionHref } from "../slug";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -42,7 +54,7 @@ export function loader({ params }: Route.LoaderArgs) {
   const detail = getConcession(hit.reg_num);
   if (!detail) throw new Response("Not Found", { status: 404 });
 
-  return { detail };
+  return { detail, related: relatedConcessions(hit.reg_num) };
 }
 
 /**
@@ -163,8 +175,22 @@ function fmtInputs(inputs: Record<string, unknown>): string {
 }
 
 export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
-  const { detail } = loaderData;
+  const { detail, related } = loaderData;
   const c = detail.concession;
+  const objectKind = detail.objects[0]?.kind ?? null;
+  const crumbs: Crumb[] = [
+    { label: "Начало", to: "/" },
+    { label: "Концесии", to: "/concessions" },
+    ...(objectKind
+      ? [
+          {
+            label: KIND_LABELS[objectKind] ?? objectKind,
+            to: kindHref(objectKind),
+          },
+        ]
+      : []),
+    { label: regNumLabel(c.reg_num) },
+  ];
   const flagDetail = (
     code: string,
     inputs: Record<string, unknown>,
@@ -177,8 +203,9 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
+      <Breadcrumbs items={crumbs} />
       {/* Паспортът на партидата */}
-      <div className="mt-7 mb-6 grid grid-cols-[auto_1fr] border-[1.5px] border-ink bg-raised md:grid-cols-[auto_1fr_auto]">
+      <div className="mt-4 mb-6 grid grid-cols-[auto_1fr] border-[1.5px] border-ink bg-raised md:grid-cols-[auto_1fr_auto]">
         <div className="flex items-center justify-center bg-water px-1.5 py-3.5 font-mono text-[13px] tracking-[0.12em] text-paper [writing-mode:vertical-rl] rotate-180">
           ПАРТИДА {c.reg_num}
         </div>
@@ -414,6 +441,33 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         )}
       </Razdel>
 
+      {(related.byGrantor.length > 0 || related.byKind.length > 0) && (
+        <section className="mt-6 grid gap-8 border-t border-limestone pt-5 md:grid-cols-2">
+          {detail.grantor && (
+            <RelatedList
+              title={`Други концесии на ${detail.grantor.name}`}
+              rows={related.byGrantor}
+              more={{
+                label: "Всички партиди на този концедент →",
+                to: `/grantors/${encodeURIComponent(detail.grantor.id.slice(3))}`,
+              }}
+            />
+          )}
+          {objectKind && (
+            <RelatedList
+              title={`Други концесии от същия вид: ${(
+                KIND_LABELS[objectKind] ?? objectKind
+              ).toLowerCase()}`}
+              rows={related.byKind}
+              more={{
+                label: `Всички ${(KIND_LABELS[objectKind] ?? objectKind).toLowerCase()} концесии →`,
+                to: kindHref(objectKind),
+              }}
+            />
+          )}
+        </section>
+      )}
+
       {/* Произход: всяко число на страницата е проследимо */}
       <div className="mt-6 flex flex-wrap items-center gap-2.5 border-t-[1.5px] border-ink pt-3.5 pb-8 text-[13px] text-stone">
         <span>Всяко число на тази страница е проследимо:</span>
@@ -423,7 +477,9 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         {c["announcement_url"] != null && (
           <Prov href={c.announcement_url}>Обявление</Prov>
         )}
-        <Prov href={`${concessionHref(detail.slug)}/json`}>JSON изглед</Prov>
+        <Prov href={`${concessionHref(detail.slug)}/json`} nofollow>
+          JSON изглед
+        </Prov>
         <span className="ml-auto">снето на {c.fetched_at}</span>
       </div>
     </>

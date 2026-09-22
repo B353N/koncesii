@@ -4,6 +4,7 @@ import {
   fmtEur,
   fmtMonths,
   KIND_LABELS,
+  KIND_PAGE_TITLES,
   SEVERITY_LABELS,
 } from "./format";
 import {
@@ -92,11 +93,15 @@ function mdHome(): string {
   );
 }
 
-function mdConcessions(url: URL, heading: string): string {
+function mdConcessions(
+  url: URL,
+  heading: string,
+  kind: string | null = url.searchParams.get("kind"),
+): string {
   const q = url.searchParams.get("q");
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const { rows, total } = listConcessions({
-    kind: url.searchParams.get("kind"),
+    kind,
     status: url.searchParams.get("status"),
     flagged: url.searchParams.get("flagged") === "1",
     q,
@@ -353,10 +358,14 @@ export function renderMarkdown(url: URL): string | null {
   else if (path === "/methodology") body = mdMethodology();
   else if (path === "/map") body = mdMap();
   else {
+    const kind = seg("/concessions/vid/");
     const regNum = seg("/concessions/");
     const grantor = seg("/grantors/");
     const company = seg("/companies/");
-    if (regNum && !regNum.endsWith("/json")) body = mdConcessionDetail(regNum);
+    if (kind && kind in KIND_LABELS)
+      body = mdConcessions(url, KIND_PAGE_TITLES[kind] ?? kind, kind);
+    else if (regNum && !regNum.endsWith("/json"))
+      body = mdConcessionDetail(regNum);
     else if (grantor) body = mdGrantorDetail(grantor);
     else if (company) body = mdCompanyDetail(company);
   }

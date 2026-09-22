@@ -1,5 +1,6 @@
 import { Form, Link } from "react-router";
 import type { Route } from "./+types/home";
+import { kindHref } from "../concessions-list";
 import { concessionHref } from "../slug";
 import { DataPending } from "../components";
 import { fmtMonths, fmtPercent, KIND_LABELS } from "../format";
@@ -8,6 +9,7 @@ import {
   kindCounts,
   lowestPaymentRatio,
   topByTerm,
+  topGrantors,
 } from "../queries.server";
 
 export function meta({}: Route.MetaArgs) {
@@ -28,11 +30,12 @@ export function loader({}: Route.LoaderArgs) {
     kinds: kindCounts(),
     longest: topByTerm(5),
     lowest: lowestPaymentRatio(5),
+    grantors: topGrantors(12),
   };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { summary, kinds, longest, lowest } = loaderData;
+  const { summary, kinds, longest, lowest, grantors } = loaderData;
   if (!summary) return <DataPending />;
 
   return (
@@ -91,7 +94,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         {kinds.map((k) => (
           <Link
             key={k.kind}
-            to={`/concessions?kind=${k.kind}`}
+            to={kindHref(k.kind)}
             className="bg-raised px-3.5 py-3 no-underline hover:bg-[#f2f4ee]"
           >
             <span className="block font-mono text-[22px] tabular-nums">
@@ -102,6 +105,40 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </span>
           </Link>
         ))}
+      </section>
+
+      <section className="mt-9">
+        <h2 className="font-display text-lg font-bold">
+          Кой отдава най-много концесии
+        </h2>
+        <p className="mb-2.5 text-xs text-stone">
+          концеденти по брой партиди в регистрите
+        </p>
+        <ul className="grid gap-x-6 gap-y-0.5 text-[13.5px] sm:grid-cols-2 md:grid-cols-3">
+          {grantors.map((g) => (
+            <li
+              key={g.slug}
+              className="flex items-baseline justify-between gap-2 border-b border-limestone py-1.5"
+            >
+              <Link
+                to={`/grantors/${encodeURIComponent(g.slug)}`}
+                className="truncate text-water underline decoration-1 underline-offset-2"
+                title={g.name}
+              >
+                {g.name}
+              </Link>
+              <span className="font-mono text-xs tabular-nums text-stone">
+                {g.concessions}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <Link
+          to="/grantors"
+          className="mt-2 inline-block text-[13px] text-water underline underline-offset-2"
+        >
+          Всички концеденти →
+        </Link>
       </section>
 
       <section className="mt-9 grid gap-8 pb-6 md:grid-cols-2">

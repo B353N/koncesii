@@ -1,9 +1,9 @@
 import {
   allConcessionSlugs,
-  getSummary,
   listCompanies,
   listGrantors,
 } from "../queries.server";
+import { KIND_LABELS } from "../format";
 import { concessionHref } from "../slug";
 
 export const BASE = "https://koncesii.com";
@@ -27,6 +27,7 @@ type Section = (typeof SECTIONS)[number];
 const PAGES = [
   "",
   "/concessions",
+  ...Object.keys(KIND_LABELS).map((k) => `/concessions/vid/${k}`),
   "/grantors",
   "/companies",
   "/map",
@@ -62,9 +63,10 @@ export function loader({ request }: { request: Request }) {
   const section = SECTIONS.find((s) => s === m?.[1]);
   if (!section) return new Response("Not found", { status: 404 });
 
-  const lastmod = getSummary()?.data_date;
-  const entry = (u: string) =>
-    `  <url><loc>${u}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}</url>`;
+  // Един и същи lastmod на 2000 URL е шум, който Google игнорира - датата
+  // на снапшота стои в sitemap index-а, а на ниво URL ще влезе реалната
+  // дата на промяна по партидата, когато я има в базата.
+  const entry = (u: string) => `  <url><loc>${u}</loc></url>`;
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +

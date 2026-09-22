@@ -86,16 +86,22 @@ export function FlagBadge({
 export function Prov({
   href,
   children,
+  nofollow = false,
 }: {
   href: string;
   children: ReactNode;
+  /** Машинни изгледи (CSV, JSON) не се подават на търсачките - пестят crawl budget. */
+  nofollow?: boolean;
 }) {
   const external = href.startsWith("http");
+  const rel = [external && "noopener", nofollow && "nofollow"]
+    .filter(Boolean)
+    .join(" ");
   return (
     <a
       href={href}
       className="inline-flex items-center gap-1.5 rounded-[2px] border border-limestone bg-raised px-2 py-0.5 text-[12.5px] text-water no-underline hover:border-water"
-      {...(external ? { rel: "noopener" } : {})}
+      {...(rel ? { rel } : {})}
     >
       {children}
       {external && <span className="text-[11px]">↗</span>}
@@ -147,6 +153,87 @@ export function DataPending() {
         </a>
         .
       </p>
+    </div>
+  );
+}
+
+export interface Crumb {
+  label: string;
+  /** Последната троха е текущата страница и няма линк. */
+  to?: string;
+}
+
+/**
+ * Пътека до страницата: дава на читателя и на търсачките структурата
+ * Начало > Концесии > Вид > Партида. Schema.org разметката се добавя
+ * отделно като JSON-LD (jsonLd.ts).
+ */
+export function Breadcrumbs({ items }: { items: Crumb[] }) {
+  return (
+    <nav aria-label="Пътека" className="pt-6 text-[13px] text-stone">
+      <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        {items.map((c, i) => (
+          <li key={i} className="flex items-center gap-1.5">
+            {i > 0 && (
+              <span aria-hidden="true" className="text-limestone">
+                ›
+              </span>
+            )}
+            {c.to ? (
+              <Link to={c.to} className="text-water hover:underline">
+                {c.label}
+              </Link>
+            ) : (
+              <span className="text-ink/70">{c.label}</span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+/** Кратък списък от свързани партиди (същия концедент / същия вид). */
+export function RelatedList({
+  title,
+  rows,
+  more,
+}: {
+  title: string;
+  rows: ConcessionRow[];
+  more?: { label: string; to: string };
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div>
+      <h2 className="font-display text-base font-bold">{title}</h2>
+      <ul className="mt-1.5 text-[13.5px]">
+        {rows.map((r) => (
+          <li key={r.reg_num} className="border-t border-limestone py-1.5">
+            <Link
+              to={concessionHref(r.slug)}
+              className="line-clamp-2 text-water underline decoration-1 underline-offset-2"
+              title={r.title}
+            >
+              {r.title}
+            </Link>
+            <span className="block font-mono text-xs text-stone">
+              {regNumLabel(r.reg_num)}
+              {r.annual_payment_eur != null && (
+                <> · {fmtEur(r.annual_payment_eur)} годишно</>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {more && (
+        <Link
+          to={more.to}
+          className="mt-1.5 inline-block text-[13px] text-water underline underline-offset-2"
+        >
+          {more.label}
+        </Link>
+      )}
     </div>
   );
 }
@@ -276,8 +363,14 @@ export function ExportLinks({
   return (
     <div className="my-3 flex items-center gap-3 text-[13px] text-stone">
       <span>експорт:</span>
-      <Prov href={csvHref}>CSV</Prov>
-      {jsonHref && <Prov href={jsonHref}>JSON</Prov>}
+      <Prov href={csvHref} nofollow>
+        CSV
+      </Prov>
+      {jsonHref && (
+        <Prov href={jsonHref} nofollow>
+          JSON
+        </Prov>
+      )}
     </div>
   );
 }

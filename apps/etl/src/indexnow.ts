@@ -1,3 +1,6 @@
+import { readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 
 /**
@@ -13,6 +16,12 @@ import Database from "better-sqlite3";
  */
 
 const ENDPOINT = "https://api.indexnow.org/indexnow";
+/** Проверката на IndexNow: файл на корена, чието име е самият ключ. */
+const PUBLIC_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../apps/web/public",
+);
+const KEY_FILE_RE = /^([0-9a-f]{32})\.txt$/;
 const HOST = "koncesii.com";
 const BASE = `https://${HOST}`;
 /** IndexNow приема до 10 000 адреса в едно известие. */
@@ -61,6 +70,25 @@ export function changedUrls(dbPath: string, date: string): string[] {
   } finally {
     db.close();
   }
+}
+
+/**
+ * Ключът: от KONCESII_INDEXNOW_KEY, иначе от името на файла в
+ * apps/web/public. Един източник на истина - същият файл, който сайтът
+ * обслужва, и който търсачката чете, за да провери известието.
+ */
+export function indexNowKey(): string | null {
+  const env = process.env["KONCESII_INDEXNOW_KEY"]?.trim();
+  if (env) return env;
+  try {
+    for (const name of readdirSync(PUBLIC_DIR)) {
+      const m = KEY_FILE_RE.exec(name);
+      if (m) return m[1]!;
+    }
+  } catch {
+    // няма папка (друг layout) - просто няма известяване
+  }
+  return null;
 }
 
 export interface PingResult {

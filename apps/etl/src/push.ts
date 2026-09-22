@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 import Database from "better-sqlite3";
-import { changedUrls, pingIndexNow } from "./indexnow";
+import { changedUrls, indexNowKey, pingIndexNow } from "./indexnow";
 import { verifyReport, type IntegrityReport } from "./report";
 
 /**
@@ -96,7 +96,11 @@ async function main() {
   // Google няма такъв механизъм - за него работи lastmod в sitemap-а.
   // Провал тук не отменя публикацията: базата вече е на сървъра.
   if (process.argv.includes("--no-ping")) return;
-  const key = process.env["KONCESII_INDEXNOW_KEY"] ?? INDEXNOW_KEY;
+  const key = indexNowKey();
+  if (!key) {
+    console.log("[push] IndexNow: няма ключ - известяването е прескочено");
+    return;
+  }
   const urls = changedUrls(dbPath, expected.snapshot_date);
   if (urls.length === 0) {
     console.log("[push] IndexNow: няма променени адреси за известяване");
@@ -111,11 +115,5 @@ async function main() {
     );
   }
 }
-
-/**
- * Ключът се обслужва и от сайта на /<key>.txt - двете стойности трябва
- * да съвпадат, иначе IndexNow отхвърля известието.
- */
-const INDEXNOW_KEY = "5ce6c3405a4f93fd10b9128f208b2052";
 
 await main();

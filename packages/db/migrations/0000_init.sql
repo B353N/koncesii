@@ -137,8 +137,15 @@ CREATE TABLE concessions (
   source               TEXT NOT NULL CHECK (source IN ('nkr', 'nkrold', 'egov')),
   source_url           TEXT NOT NULL,    -- URL на партидата
   announcement_url     TEXT,
-  fetched_at           TEXT NOT NULL
+  fetched_at           TEXT NOT NULL,
+
+  -- свежест: хеш на показваното съдържание и датата на снапшота, в който
+  -- то за последно се е променило (apps/etl/src/changes.ts). `changed_at`
+  -- е lastmod в sitemap-а — еднаква дата на всички URL е шум за Google.
+  content_hash         TEXT,
+  changed_at           TEXT
 );
+CREATE INDEX idx_concessions_changed_at ON concessions (changed_at);
 CREATE INDEX idx_concessions_grantor ON concessions (grantor_id);
 CREATE INDEX idx_concessions_concessionaire ON concessions (concessionaire_id);
 CREATE INDEX idx_concessions_status ON concessions (status);

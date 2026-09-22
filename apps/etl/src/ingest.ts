@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type Database from "better-sqlite3";
+import { applyChangeTracking, readPreviousState } from "./changes";
 import { createDatabase } from "./db";
 import { loadSnapshot, type Snapshot } from "./snapshot";
 import { stageEgov, stageNkrExport, stageNkrLots } from "./staging";
@@ -29,19 +30,30 @@ export interface IngestResult {
   report: IntegrityReport;
   unmappedHeaders: Record<string, string[]>;
   mirrorsSkipped: number;
+  /** Разбивка спрямо предишната база: нови / променени / непроменени. */
+  changes: { added: number; changed: number; unchanged: number };
 }
 
 export function runIngest(
   snapshotDir: string,
   date: string,
   outPath: string,
+  /**
+   * Предишната публикувана база: от нея се пренася `changed_at` на
+   * непроменените партиди. По подразбиране това е самият изходен файл,
+   * ако вече съществува. null изключва сравнението.
+   */
+  previousPath: string | null = outPath,
 ): IngestResult {
   const snap: Snapshot = loadSnapshot(snapshotDir, date);
+  // чете се преди createDatabase — тя трие изходния файл
+  const previous = readPreviousState(previousPath);
   const db: Database.Database = createDatabase(outPath);
 
   try {
     let report!: IntegrityReport;
     let egov!: ReturnType<typeof stageEgov>;
+    let changes!: ReturnType<typeof applyChangeTracking>;
 
     db.transaction(() => {
       const nExport = stageNkrExport(db, snap);
@@ -49,6 +61,15 @@ export function runIngest(
       egov = stageEgov(db, snap);
       const stats = unify(db, lots, date);
       const nFlags = deriveFlags(db, date);
+
+      // свежест: кои партиди наистина са се променили спрямо предишната
+      // база — датата влиза в sitemap-а като lastmod
+      changes = applyChangeTracking(db, previous, date);
+      console.log(
+        `[ingest] промени спрямо предишната база: ${changes.added} нови, ` +
+          `${changes.changed} променени, ${changes.unchanged} без промяна` +
+          (previous.size === 0 ? " (няма предишна база)" : ""),
+      );
 
       // precompute: GeoJSON за картата (центроиди, приблизителни)
       const points = db
@@ -117,6 +138,7 @@ export function runIngest(
       report,
       unmappedHeaders: Object.fromEntries(egov.unmapped),
       mirrorsSkipped: egov.mirrorsSkipped,
+      changes,
     };
   } finally {
     db.close();
@@ -134,6 +156,10 @@ async function main() {
   const snapshotDate = arg("--snapshot");
   const fixtures = process.argv.includes("--fixtures");
   const out = arg("--out") ?? join(BUILD_DIR, "koncesii.sqlite");
+  // --previous <db> сверява спрямо друга база; --no-previous я изключва
+  const previous = process.argv.includes("--no-previous")
+    ? null
+    : (arg("--previous") ?? out);
 
   let dir: string;
   let date: string;
@@ -161,12 +187,12 @@ async function main() {
     });
   } else {
     console.error(
-      "употреба: pnpm ingest --local <dir> --date YYYY-MM-DD | --snapshot YYYY-MM-DD | --fixtures [--out <file>]",
+      "употреба: pnpm ingest --local <dir> --date YYYY-MM-DD | --snapshot YYYY-MM-DD | --fixtures [--out <file>] [--previous <db> | --no-previous]",
     );
     process.exit(2);
   }
 
-  const { report, unmappedHeaders } = runIngest(dir, date, out);
+  const { report, unmappedHeaders } = runIngest(dir, date, out, previous);
 
   writeFileSync(
     join(BUILD_DIR, "ingest-report.json"),

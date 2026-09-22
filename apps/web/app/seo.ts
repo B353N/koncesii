@@ -139,7 +139,7 @@ export interface ConcessionTitleParts {
   /** Описанието на обекта от раздел IV, ако е по-конкретно от заглавието. */
   objectDescription?: string | null;
   grantorName?: string | null;
-  /** „за услуги", „за строителство" — видът на самата концесия. */
+  /** „за услуги", „за строителство" - видът на самата концесия. */
   concessionKindLabel?: string | null;
 }
 

@@ -26,6 +26,7 @@
 
 - [`v1-implementation-plan.md`](v1-implementation-plan.md) — фазите до v1 и дефиниция на готово.
 - [`seo-indexing-plan.md`](seo-indexing-plan.md) — планът за индексиране в Google след одита на Search Console от 21.09.2026.
+- [`outreach.md`](outreach.md) — находките и формата на писмото за външни контакти (изпращането е ръчно).
 
 ## Конвенции (в корена)
 

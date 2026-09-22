@@ -15,6 +15,8 @@ export default [
   route("companies", "routes/companies.tsx"),
   route("companies.csv", "routes/companies-csv.ts"),
   route("companies/:eik", "routes/company-detail.tsx"),
+  route("blog", "routes/blog.tsx"),
+  route("blog/:slug", "routes/blog-post.tsx"),
   route("changes", "routes/changes.tsx"),
   route("map", "routes/map.tsx"),
   route("map.geojson", "routes/map-geojson.ts"),

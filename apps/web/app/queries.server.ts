@@ -604,6 +604,105 @@ export function kindStats(kind: string): KindStats {
   );
 }
 
+export interface CompletenessStats {
+  total: number;
+  with_payment: number;
+  with_concessionaire: number;
+  with_term: number;
+  with_value: number;
+  without_status: number;
+}
+
+/** Колко от партидите носят кое поле - основата на „какво липсва". */
+export function completenessStats(): CompletenessStats | null {
+  const db = getDb();
+  if (!db) return null;
+  return (
+    db
+      .prepare<[], CompletenessStats>(
+        `SELECT COUNT(*) AS total,
+                SUM(annual_payment_eur IS NOT NULL) AS with_payment,
+                SUM(concessionaire_id IS NOT NULL) AS with_concessionaire,
+                SUM(term_months IS NOT NULL) AS with_term,
+                SUM(value_eur IS NOT NULL) AS with_value,
+                SUM(status IS NULL OR status = '') AS without_status
+         FROM concessions`,
+      )
+      .get() ?? null
+  );
+}
+
+export interface TermBand {
+  with_term: number;
+  over_25y: number;
+  over_35y: number;
+  max_months: number | null;
+}
+
+/** Разпределение на сроковете - за анализа на дългите концесии. */
+export function termBands(kind?: string | null): TermBand {
+  const empty: TermBand = {
+    with_term: 0,
+    over_25y: 0,
+    over_35y: 0,
+    max_months: null,
+  };
+  const db = getDb();
+  if (!db) return empty;
+  const where = kind
+    ? `JOIN objects o ON o.concession_id = c.id AND o.seq = 1 AND o.kind = @kind`
+    : "";
+  return (
+    db
+      .prepare<[Record<string, string>], TermBand>(
+        `SELECT SUM(c.term_months IS NOT NULL) AS with_term,
+                SUM(c.term_months >= 300) AS over_25y,
+                SUM(c.term_months >= 420) AS over_35y,
+                MAX(c.term_months) AS max_months
+         FROM concessions c ${where}`,
+      )
+      .get(kind ? { kind } : {}) ?? empty
+  );
+}
+
+/** Партидите с най-голямо годишно възнаграждение за даден вид обект. */
+export function topPaymentsByKind(kind: string, limit = 8): ConcessionRow[] {
+  const db = getDb();
+  if (!db) return [];
+  return withSlugs(
+    db,
+    db
+      .prepare<[string, number], ListRow>(
+        `${LIST_SQL} WHERE o.kind = ? AND c.annual_payment_eur IS NOT NULL
+         ORDER BY c.annual_payment_eur DESC, c.reg_num LIMIT ?`,
+      )
+      .all(kind, limit),
+  );
+}
+
+/** Концедентите с най-много партиди за даден вид обект. */
+export function topGrantorsByKind(
+  kind: string,
+  limit = 8,
+): Array<{ slug: string; name: string; n: number }> {
+  const db = getDb();
+  if (!db) return [];
+  return db
+    .prepare<[string, number], { slug: string; name: string; n: number }>(
+      `SELECT substr(g.id, 4) AS slug, g.name, COUNT(*) AS n
+       FROM concessions c
+       JOIN grantors g ON g.id = c.grantor_id
+       JOIN objects o ON o.concession_id = c.id AND o.seq = 1
+       WHERE o.kind = ? GROUP BY g.id ORDER BY n DESC, g.name LIMIT ?`,
+    )
+    .all(kind, limit);
+}
+
+/** Най-дългите срокове с вида на обекта - за анализа на сроковете. */
+export function longestTerms(limit = 10): Array<ConcessionRow> {
+  return topByTerm(limit);
+}
+
 export function topByTerm(limit: number): ConcessionRow[] {
   const db = getDb();
   if (!db) return [];

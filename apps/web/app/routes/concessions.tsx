@@ -9,6 +9,7 @@ import {
   readListFilters,
   readPage,
 } from "../concessions-list";
+import { KIND_LABELS } from "../format";
 import { getSummary, listConcessions } from "../queries.server";
 import {
   absUrl,
@@ -45,6 +46,9 @@ export function loader({ request }: Route.LoaderArgs) {
   const filters = readListFilters(url);
   // Видът има собствена страница (/concessions/vid/:kind) със свой
   // canonical; старият ?kind= адрес е 301 към нея с останалите филтри.
+  // Непознат вид е 404 още тук, вместо 301 към страница, която пак е 404.
+  if (filters.kind && !(filters.kind in KIND_LABELS))
+    throw new Response("Not Found", { status: 404 });
   if (filters.kind) {
     const rest = filtersQuery(filters, { withKind: false });
     const page = readPage(url);

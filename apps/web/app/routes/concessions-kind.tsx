@@ -1,5 +1,5 @@
 import type { Route } from "./+types/concessions-kind";
-import { DataPending } from "../components";
+import { Breadcrumbs, DataPending, type Crumb } from "../components";
 import {
   ConcessionsListView,
   kindHref,
@@ -14,7 +14,9 @@ import {
   KIND_PAGE_TITLES,
 } from "../format";
 import { getSummary, kindStats, listConcessions } from "../queries.server";
-import { pagedLinkDescriptors, pagedMeta, pageTitle } from "../seo";
+import { absUrl, pagedLinkDescriptors, pagedMeta, pageTitle } from "../seo";
+import { breadcrumbJsonLd, itemListJsonLd, jsonLdScript } from "../jsonLd";
+import { concessionHref } from "../slug";
 
 /**
  * /concessions/vid/:kind - страница по вид обект (язовири, плажове, добив…).
@@ -77,45 +79,63 @@ export default function ConcessionsByKind({
   const { kind, rows, total, page, filters, stats, hasDb } = loaderData;
   if (!hasDb) return <DataPending />;
   const heading = KIND_PAGE_TITLES[kind] ?? `Концесии: ${kind}`;
+  const crumbs: Crumb[] = [
+    { label: "Начало", to: "/" },
+    { label: "Концесии", to: "/concessions" },
+    { label: KIND_LABELS[kind] ?? kind },
+  ];
 
   return (
-    <ConcessionsListView
-      rows={rows}
-      total={total}
-      page={page}
-      filters={filters}
-      basePath={kindHref(kind)}
-      title={heading}
-      count={
-        <>
-          {stats.total} {stats.total === 1 ? "партида" : "партиди"} ·{" "}
-          {stats.grantors} {stats.grantors === 1 ? "концедент" : "концеденти"}
-          {filters.flagged && <> · само с индикатор</>}
-          {page > 1 && (
-            <>
-              {" "}
-              · страница {page} от {Math.ceil(total / PAGE_SIZE)}
-            </>
-          )}
-        </>
-      }
-      intro={
-        <div className="mt-4 max-w-[70ch] text-[15px] leading-relaxed text-ink/90">
-          <p>{KIND_PAGE_INTROS[kind]}</p>
-          <p className="mt-2 text-stone">
-            По регистрите: {stats.with_payment} от {stats.total} партиди имат
-            вписано годишно възнаграждение
-            {stats.annual_sum != null && stats.with_payment > 0 && (
-              <> (общо {fmtEur(stats.annual_sum)} годишно)</>
+    <>
+      <Breadcrumbs items={crumbs} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={jsonLdScript([
+          breadcrumbJsonLd(crumbs),
+          itemListJsonLd(
+            rows.map((r) => absUrl(concessionHref(r.slug))),
+            { startIndex: (page - 1) * PAGE_SIZE + 1 },
+          ),
+        ])}
+      />
+      <ConcessionsListView
+        rows={rows}
+        total={total}
+        page={page}
+        filters={filters}
+        basePath={kindHref(kind)}
+        title={heading}
+        count={
+          <>
+            {stats.total} {stats.total === 1 ? "партида" : "партиди"} ·{" "}
+            {stats.grantors} {stats.grantors === 1 ? "концедент" : "концеденти"}
+            {filters.flagged && <> · само с индикатор</>}
+            {page > 1 && (
+              <>
+                {" "}
+                · страница {page} от {Math.ceil(total / PAGE_SIZE)}
+              </>
             )}
-            ; {stats.with_term} са със записан срок, среден срок{" "}
-            {years(stats.avg_term_months)}; {stats.flagged}{" "}
-            {stats.flagged === 1 ? "партида е" : "партиди са"} с поне един
-            индикатор за риск по публичната методология. Всяко число води до
-            партидата в източника.
-          </p>
-        </div>
-      }
-    />
+          </>
+        }
+        intro={
+          <div className="mt-4 max-w-[70ch] text-[15px] leading-relaxed text-ink/90">
+            <p>{KIND_PAGE_INTROS[kind]}</p>
+            <p className="mt-2 text-stone">
+              По регистрите: {stats.with_payment} от {stats.total} партиди имат
+              вписано годишно възнаграждение
+              {stats.annual_sum != null && stats.with_payment > 0 && (
+                <> (общо {fmtEur(stats.annual_sum)} годишно)</>
+              )}
+              ; {stats.with_term} са със записан срок, среден срок{" "}
+              {years(stats.avg_term_months)}; {stats.flagged}{" "}
+              {stats.flagged === 1 ? "партида е" : "партиди са"} с поне един
+              индикатор за риск по публичната методология. Всяко число води до
+              партидата в източника.
+            </p>
+          </div>
+        }
+      />
+    </>
   );
 }

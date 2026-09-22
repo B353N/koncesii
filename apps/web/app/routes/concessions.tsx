@@ -10,7 +10,15 @@ import {
   readPage,
 } from "../concessions-list";
 import { getSummary, listConcessions } from "../queries.server";
-import { pagedLinkDescriptors, pagedMeta, pageTitle } from "../seo";
+import {
+  absUrl,
+  ogDescriptors,
+  pagedLinkDescriptors,
+  pagedMeta,
+  pageTitle,
+} from "../seo";
+import { itemListJsonLd, jsonLdScript } from "../jsonLd";
+import { concessionHref } from "../slug";
 
 const DESCRIPTION =
   "Всички концесии в България с филтри по вид, статус и индикатори. CSV експорт, всяка партида проследима до Националния концесионен регистър.";
@@ -20,14 +28,14 @@ export function meta({ loaderData }: Route.MetaArgs) {
   const pages = Math.max(1, Math.ceil((loaderData?.total ?? 0) / PAGE_SIZE));
   const paged = pagedMeta("/concessions", page, pages);
   const suffix = paged.pageLabel ? `, ${paged.pageLabel}` : "";
+  const title = `Концесии в България${suffix}`;
+  const description = paged.pageLabel
+    ? `${DESCRIPTION} Страница ${page} от ${pages}.`
+    : DESCRIPTION;
   return [
-    { title: pageTitle(`Концесии в България${suffix}`) },
-    {
-      name: "description",
-      content: paged.pageLabel
-        ? `${DESCRIPTION} Страница ${page} от ${pages}.`
-        : DESCRIPTION,
-    },
+    { title: pageTitle(title) },
+    { name: "description", content: description },
+    ...ogDescriptors({ title, description, url: paged.canonical }),
     ...pagedLinkDescriptors(paged),
   ];
 }
@@ -59,13 +67,24 @@ export default function Concessions({ loaderData }: Route.ComponentProps) {
   const { rows, total, page, filters, hasDb } = loaderData;
   if (!hasDb) return <DataPending />;
   return (
-    <ConcessionsListView
-      rows={rows}
-      total={total}
-      page={page}
-      filters={filters}
-      basePath="/concessions"
-      title="Концесии"
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={jsonLdScript(
+          itemListJsonLd(
+            rows.map((r) => absUrl(concessionHref(r.slug))),
+            { startIndex: (page - 1) * PAGE_SIZE + 1 },
+          ),
+        )}
+      />
+      <ConcessionsListView
+        rows={rows}
+        total={total}
+        page={page}
+        filters={filters}
+        basePath="/concessions"
+        title="Концесии"
+      />
+    </>
   );
 }

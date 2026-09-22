@@ -10,7 +10,9 @@ import {
 } from "../components";
 import { kindHref } from "../concessions-list";
 import {
+  BGN_EUR_RATE,
   CONCESSION_KIND_LABELS,
+  FLAG_CONDITIONS,
   FLAG_DESCRIPTIONS,
   fmtEur,
   fmtMonths,
@@ -21,28 +23,86 @@ import {
   getConcession,
   relatedConcessions,
   resolveConcession,
+  type ConcessionDetail,
 } from "../queries.server";
 import { concessionHref } from "../slug";
+import {
+  absUrl,
+  clampDescription,
+  concessionTitle,
+  pageTitle,
+  sentence,
+} from "../seo";
+import { breadcrumbJsonLd, concessionJsonLd, jsonLdScript } from "../jsonLd";
+
+/** Заглавието на страницата: регистровото, допълнено с вид и концедент. */
+function titleOf(detail: ConcessionDetail): string {
+  const c = detail.concession;
+  return concessionTitle({
+    title: c.title,
+    regNum: c.reg_num,
+    kindLabel: detail.objects[0]
+      ? (KIND_LABELS[detail.objects[0].kind] ?? null)
+      : null,
+    objectDescription: detail.objects[0]?.description ?? null,
+    grantorName: detail.grantor?.name ?? null,
+    concessionKindLabel: c.kind
+      ? (CONCESSION_KIND_LABELS[c.kind] ?? null)
+      : null,
+  });
+}
+
+/**
+ * Описанието се сглобява от фактите в базата: вид, страни, срок,
+ * възнаграждение, статус. Липсващ факт просто отпада - нищо не се
+ * попълва по предположение.
+ */
+function descriptionOf(detail: ConcessionDetail): string {
+  const c = detail.concession;
+  const kind = detail.objects[0]
+    ? (KIND_LABELS[detail.objects[0].kind] ?? null)
+    : null;
+  return clampDescription(
+    sentence([
+      kind ? `${kind}:` : "Концесия:",
+      detail.grantor ? `концедент ${detail.grantor.name},` : null,
+      detail.concessionaire
+        ? `концесионер ${detail.concessionaire.name}${
+            detail.concessionaire.eik
+              ? ` (ЕИК ${detail.concessionaire.eik})`
+              : ""
+          }.`
+        : null,
+      c.term_months != null ? `Срок ${fmtMonths(c.term_months)}.` : null,
+      c.annual_payment_eur != null
+        ? `Годишно възнаграждение ${fmtEur(c.annual_payment_eur)}.`
+        : null,
+      c.status ? `Статус: ${c.status.toLowerCase()}.` : null,
+      detail.flags.length
+        ? `${detail.flags.length} ${
+            detail.flags.length === 1 ? "индикатор" : "индикатора"
+          } за риск.`
+        : null,
+      `Партида ${c.reg_num}, проследима до официалния регистър.`,
+    ]),
+  );
+}
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const detail =
     loaderData && "detail" in loaderData ? loaderData.detail : null;
-  const c = detail?.concession ?? null;
+  if (!detail) return [{ title: pageTitle("Концесия") }];
+  const title = titleOf(detail);
+  const description = descriptionOf(detail);
+  const url = absUrl(concessionHref(detail.slug));
   return [
-    { title: c ? `${c.title} — КОНЦЕСИИ` : "Концесия — КОНЦЕСИИ" },
-    ...(c
-      ? [
-          {
-            name: "description",
-            content: `Концесия ${c.reg_num}: срок, възнаграждение, индикатори и документи — проследимо до официалния източник.`,
-          },
-          {
-            tagName: "link" as const,
-            rel: "canonical",
-            href: `https://koncesii.com${concessionHref(detail!.slug)}`,
-          },
-        ]
-      : []),
+    { title: pageTitle(title) },
+    { name: "description", content: description },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+    { property: "og:url", content: url },
+    { property: "og:type", content: "article" },
+    { tagName: "link" as const, rel: "canonical", href: url },
   ];
 }
 
@@ -177,6 +237,12 @@ function fmtInputs(inputs: Record<string, unknown>): string {
 export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
   const { detail, related } = loaderData;
   const c = detail.concession;
+  const heading = titleOf(detail);
+  const description = descriptionOf(detail);
+  // Регистровата стойност никога не изчезва: ако заглавието на страницата
+  // се различава от нея (родово или отрязано), показваме я дословно.
+  const rawSubject =
+    c.title.trim() && c.title.trim() !== heading ? c.title.trim() : null;
   const objectKind = detail.objects[0]?.kind ?? null;
   const crumbs: Crumb[] = [
     { label: "Начало", to: "/" },
@@ -204,6 +270,31 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <Breadcrumbs items={crumbs} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={jsonLdScript([
+          breadcrumbJsonLd(crumbs),
+          concessionJsonLd({
+            url: absUrl(concessionHref(detail.slug)),
+            name: heading,
+            description,
+            regNum: c.reg_num,
+            sourceUrl: c.source_url,
+            fetchedAt: c.fetched_at,
+            grantorName: detail.grantor?.name ?? null,
+            grantorUrl: detail.grantor
+              ? absUrl(
+                  `/grantors/${encodeURIComponent(detail.grantor.id.slice(3))}`,
+                )
+              : null,
+            concessionaireName: detail.concessionaire?.name ?? null,
+            concessionaireEik: detail.concessionaire?.eik ?? null,
+            concessionaireUrl: detail.concessionaire?.eik
+              ? absUrl(`/companies/${detail.concessionaire.eik}`)
+              : null,
+          }),
+        ])}
+      />
       {/* Паспортът на партидата */}
       <div className="mt-4 mb-6 grid grid-cols-[auto_1fr] border-[1.5px] border-ink bg-raised md:grid-cols-[auto_1fr_auto]">
         <div className="flex items-center justify-center bg-water px-1.5 py-3.5 font-mono text-[13px] tracking-[0.12em] text-paper [writing-mode:vertical-rl] rotate-180">
@@ -219,10 +310,10 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
           </div>
           <h1
             className={`font-display font-bold leading-tight text-balance ${
-              c.title.length > 140 ? "text-lg" : "text-2xl"
+              heading.length > 140 ? "text-lg" : "text-2xl"
             }`}
           >
-            {c.title}
+            {heading}
           </h1>
           <div className="mt-2.5 text-sm text-ink/85">
             Концедент:{" "}
@@ -283,6 +374,22 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
 
+      {/* Накратко: същите факти в едно изречение, за читател и за търсачка */}
+      <section className="mb-6">
+        <h2 className="font-display text-base font-bold">Накратко</h2>
+        <p className="mt-1 max-w-[72ch] text-[15px] leading-relaxed text-ink/90">
+          {description}
+        </p>
+        {rawSubject && (
+          <p className="mt-2 max-w-[72ch] text-[13.5px] text-stone">
+            <span className="font-mono text-[11.5px] uppercase tracking-wider">
+              Предмет по регистъра:
+            </span>{" "}
+            <span className="italic">„{rawSubject}“</span>
+          </p>
+        )}
+      </section>
+
       {/* Индикатори с формулата и входните числа */}
       {detail.flags.length > 0 && (
         <div className="mb-6 overflow-hidden rounded-[3px] border border-oxide/40">
@@ -313,6 +420,8 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                       {fmtInputs(inputs)}
                     </code>
                     <p className="mt-1 text-[13px] text-stone">
+                      Условие по методологията:{" "}
+                      {FLAG_CONDITIONS[f.code] ?? "виж методологията"}.
                       Индикаторът е аритметичен факт, не твърдение за нарушение.{" "}
                       <Link
                         to="/methodology"
@@ -393,6 +502,15 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             flag={c.term_flag}
           />
         </div>
+        <p className="max-w-[70ch] pb-2 text-[13px] text-stone">
+          Как е изчислено: сумите в лева се превалутират по фиксирания курс{" "}
+          {BGN_EUR_RATE.toLocaleString("bg-BG", {
+            minimumFractionDigits: 5,
+          })}{" "}
+          лв. за 1 €. Оригиналният запис от регистъра стои до всяка стойност,
+          заедно с флага за качеството му; при противоречие между източниците
+          стойността се отбелязва, а не се поправя.
+        </p>
         {detail.payments.length > 0 && (
           <div className="pb-2 text-[13px] text-stone">
             Записани плащания от допълващи източници:{" "}

@@ -3,15 +3,22 @@ import type { Route } from "./+types/companies";
 import { DataPending, ExportLinks, PageTitle } from "../components";
 import { fmtEur } from "../format";
 import { getSummary, listCompanies } from "../queries.server";
+import { absUrl, ogDescriptors, pageTitle } from "../seo";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Компании — КОНЦЕСИИ" },
+    { title: pageTitle("Компании концесионери в България") },
     {
       name: "description",
       content:
         "Концесионерите в България по ЕИК: кой какво държи, откога и срещу какво възнаграждение.",
     },
+    ...ogDescriptors({
+      title: "Компании концесионери в България",
+      description:
+        "Концесионерите в България по ЕИК: кой какво държи, откога и срещу какво възнаграждение.",
+      url: absUrl("/companies"),
+    }),
     {
       tagName: "link",
       rel: "canonical",

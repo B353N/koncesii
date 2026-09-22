@@ -3,15 +3,22 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { marked } from "marked";
 import type { Route } from "./+types/methodology";
+import { absUrl, ogDescriptors, pageTitle } from "../seo";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Методология на индикаторите за риск — КОНЦЕСИИ" },
+    { title: pageTitle("Методология на индикаторите за риск") },
     {
       name: "description",
       content:
         "Публичната методология на индикаторите за риск: всеки флаг е възпроизводим аритметичен факт с явни прагове.",
     },
+    ...ogDescriptors({
+      title: "Методология на индикаторите за риск",
+      description:
+        "Публичната методология на индикаторите за риск: всеки флаг е възпроизводим аритметичен факт с явни прагове.",
+      url: absUrl("/methodology"),
+    }),
     {
       tagName: "link",
       rel: "canonical",

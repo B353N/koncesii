@@ -53,3 +53,172 @@ export function pagedLinkDescriptors(m: PagedMeta) {
   if (m.next) out.push({ tagName: "link", rel: "next", href: m.next });
   return out;
 }
+
+/**
+ * Заглавията идват както са в регистъра: 33 партиди имат под 15 знака
+ * ("услуга", "3"), 142 носят целия текст на решението (над 200 знака), а
+ * 23 заглавия се повтарят на 84 страници. Суровата стойност остава
+ * видима на страницата ("Предмет по регистъра"); за title и h1 я
+ * допълваме детерминистично с факти, които вече са в базата - вид,
+ * концедент, номер на партида. Нищо не се измисля.
+ */
+
+/** Родови заглавия, които не различават партидата от съседната. */
+const GENERIC_TITLES = new Set([
+  "услуга",
+  "услуги",
+  "строителство",
+  "строителство и управление",
+  "концесия за услуги",
+  "концесия за услуга",
+  "концесия за строителство",
+  "особено право на ползване",
+  "концесия",
+  "друго",
+]);
+
+const MIN_DISTINCT = 25;
+const MAX_TITLE = 135;
+
+/** Разделители, на които дългото регистрово заглавие се реже смислено. */
+const CUT_RE =
+  /(,\s*(област|община|разположено|находящ|описан)|\s+[–—-]\s+|;|\s\(|\s+съгласно\s+|\s+описан[оа]?\s+)/iu;
+
+/**
+ * Родово е заглавие, което не различава партидата: точна дума от списъка,
+ * само число или няколко знака. Късото, но конкретно заглавие („Рибарник
+ * Невски") се запазва - то се различава по концедент и номер.
+ */
+export function isGenericTitle(title: string): boolean {
+  const t = title
+    .trim()
+    .replace(/[.„“"'']/gu, "")
+    .toLowerCase();
+  // \W брои кирилицата за не-дума, затова проверката е по буква
+  return (
+    GENERIC_TITLES.has(t) || /^[^\p{L}]*\d+[^\p{L}]*$/u.test(t) || t.length < 6
+  );
+}
+
+/** Реже дълго заглавие на най-близкия разделител след 60-ия знак. */
+export function shortenTitle(title: string, max = MAX_TITLE): string {
+  const t = title.trim().replace(/\s+/gu, " ");
+  if (t.length <= max) return t;
+  const head = t.slice(0, max);
+  const m = CUT_RE.exec(head.slice(60));
+  if (m && m.index != null) return head.slice(0, 60 + m.index).trim();
+  const space = head.lastIndexOf(" ");
+  return (space > 60 ? head.slice(0, space) : head).trim() + "…";
+}
+
+/** Синтетичен номер от общински ресурс (uuid#ред) не се чете като номер. */
+const SYNTHETIC_REG_RE = /^([0-9a-f]{8})[0-9a-f-]{22,}#(\d+|.+)$/i;
+
+/**
+ * Как се нарича партидата в заглавие: четимо и достатъчно за разлика.
+ * Синтетичните номера пазят началото на идентификатора на ресурса -
+ * иначе ред №4 от два различни общински регистъра дава едно заглавие.
+ */
+export function regLabel(regNum: string): string {
+  const m = SYNTHETIC_REG_RE.exec(regNum);
+  return m ? `общински регистър ${m[1]}/${m[2]}` : regNum;
+}
+
+/** Име, което всъщност е URL или адрес-простиня, не влиза в заглавие. */
+function usableName(name: string | null | undefined): string | null {
+  const t = name?.trim();
+  if (!t || /^https?:\/\//i.test(t) || t.includes("://")) return null;
+  return t;
+}
+
+export interface ConcessionTitleParts {
+  title: string;
+  regNum: string;
+  /** Вид на обекта: „Морски плаж", „Язовир" … */
+  kindLabel?: string | null;
+  /** Описанието на обекта от раздел IV, ако е по-конкретно от заглавието. */
+  objectDescription?: string | null;
+  grantorName?: string | null;
+  /** „за услуги", „за строителство" — видът на самата концесия. */
+  concessionKindLabel?: string | null;
+}
+
+/**
+ * Заглавието на партидата за <title> и <h1> (без суфикса на сайта).
+ * Родовите и празните заглавия се сглобяват от вид, обект и концедент;
+ * дългите се режат и получават номера на партидата, защото отрязаната
+ * част е точно тази, която ги различава. Пълният регистров текст остава
+ * на страницата.
+ */
+export function concessionTitle(p: ConcessionTitleParts): string {
+  const raw = (p.title ?? "").trim().replace(/\s+/gu, " ");
+  const grantor = usableName(p.grantorName);
+  const generic = !raw || isGenericTitle(raw);
+
+  let head: string;
+  if (generic) {
+    const objectPart = usableName(
+      p.objectDescription &&
+        p.objectDescription.trim().toLowerCase() !== raw.toLowerCase()
+        ? p.objectDescription
+        : null,
+    );
+    head = [
+      ["Концесия", p.concessionKindLabel].filter(Boolean).join(" "),
+      objectPart ?? p.kindLabel?.toLowerCase(),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  } else {
+    head = raw;
+  }
+
+  // Опашката е фиксирана, главата се реже до бюджета. Номерът на партидата
+  // е винаги накрая: заглавията в регистъра се повтарят дословно между
+  // партиди на един и същи концедент („Концесия за строителство на
+  // автобусни спирки", 4 пъти за Варна), а отрязването маха точно
+  // различаващата част.
+  const tail: string[] = [];
+  if (grantor && !head.toLowerCase().includes(grantor.toLowerCase()))
+    tail.push(grantor);
+  tail.push(`партида ${regLabel(p.regNum)}`);
+
+  const tailText = ` · ${tail.join(" · ")}`;
+  return (
+    shortenTitle(head, Math.max(45, MAX_TITLE - tailText.length)) + tailText
+  );
+}
+
+/** Заглавие на страница за компания/концедент: името се реже, не се маха. */
+export function entityTitle(name: string, suffix: string, max = 120): string {
+  return `${shortenTitle(name.trim(), max)} ${suffix}`.trim();
+}
+
+/** Изречение от наличните факти; липсващите просто отпадат. */
+export function sentence(parts: Array<string | null | undefined>): string {
+  return parts.filter(Boolean).join(" ").replace(/\s+/gu, " ").trim();
+}
+
+/** Описание (meta description) - до ~300 знака, без измислени стойности. */
+export function clampDescription(text: string, max = 300): string {
+  const t = text.replace(/\s+/gu, " ").trim();
+  if (t.length <= max) return t;
+  const head = t.slice(0, max);
+  const cut = head.lastIndexOf(" ");
+  return (cut > 0 ? head.slice(0, cut) : head) + "…";
+}
+
+/** og:title/description/url за страница - същите текстове като в <title>. */
+export function ogDescriptors(o: {
+  title: string;
+  description: string;
+  url: string;
+  type?: string;
+}) {
+  return [
+    { property: "og:title", content: o.title },
+    { property: "og:description", content: o.description },
+    { property: "og:url", content: o.url },
+    ...(o.type ? [{ property: "og:type", content: o.type }] : []),
+  ];
+}

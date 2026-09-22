@@ -1,6 +1,7 @@
 import { Form, Link } from "react-router";
 import type { Route } from "./+types/home";
 import { kindHref } from "../concessions-list";
+import { absUrl, ogDescriptors } from "../seo";
 import { concessionHref } from "../slug";
 import { DataPending } from "../components";
 import { fmtMonths, fmtPercent, KIND_LABELS } from "../format";
@@ -14,12 +15,18 @@ import {
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "КОНЦЕСИИ — прозрачност на концесиите в България" },
+    { title: "КОНЦЕСИИ: всички концесии в България на едно място" },
     {
       name: "description",
       content:
         "Публичен портал за всички концесии в България — язовири, плажове, добив, публична собственост. Всяка сделка е проследима до официалния източник.",
     },
+    ...ogDescriptors({
+      title: "КОНЦЕСИИ: всички концесии в България на едно място",
+      description:
+        "Публичен портал за всички концесии в България — язовири, плажове, добив, публична собственост. Всяка сделка е проследима до официалния източник.",
+      url: absUrl("/"),
+    }),
     { tagName: "link", rel: "canonical", href: "https://koncesii.com/" },
   ];
 }

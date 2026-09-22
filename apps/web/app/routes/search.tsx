@@ -2,10 +2,11 @@ import { Form } from "react-router";
 import type { Route } from "./+types/search";
 import { ConcessionsTable, DataPending, PageTitle } from "../components";
 import { getSummary, listConcessions } from "../queries.server";
+import { pageTitle } from "../seo";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Търсене — КОНЦЕСИИ" },
+    { title: pageTitle("Търсене") },
     {
       name: "description",
       content:

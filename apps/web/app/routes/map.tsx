@@ -4,6 +4,7 @@ import { DataPending, PageTitle } from "../components";
 import { KIND_LABELS } from "../format";
 import { getDb } from "../db.server";
 import { getSummary } from "../queries.server";
+import { absUrl, ogDescriptors, pageTitle } from "../seo";
 import "maplibre-gl/dist/maplibre-gl.css";
 // maplibre-gl 6 е само ESM и не вгражда worker-а като blob: - Vite го
 // бъндълва като самостоятелен файл (?worker&url) и го подаваме през
@@ -13,12 +14,18 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Карта на концесиите — КОНЦЕСИИ" },
+    { title: pageTitle("Карта на концесиите в България") },
     {
       name: "description",
       content:
         "Гео-кодираните обекти на концесии в България: язовири, плажове, находища — върху карта, с връзка към партидата на всяка сделка.",
     },
+    ...ogDescriptors({
+      title: "Карта на концесиите в България",
+      description:
+        "Гео-кодираните обекти на концесии в България: язовири, плажове, находища — върху карта, с връзка към партидата на всяка сделка.",
+      url: absUrl("/map"),
+    }),
     { tagName: "link", rel: "canonical", href: "https://koncesii.com/map" },
   ];
 }

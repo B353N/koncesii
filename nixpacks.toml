@@ -4,8 +4,21 @@
 # прескача devDependencies (turbo, @react-router/dev) и билдът пада с
 # "react-router: not found". Инсталацията е явна и винаги с dev пакети -
 # те са нужни само за билда, runtime образът стартира с pnpm start.
+#
+# better-sqlite3 тегли готов бинар през prebuild-install. Ако свалянето
+# таймаутне (на 22.09.2026 се случи, докато rsync на снапшот заемаше
+# канала на сървъра), пакетът пада към node-gyp, а в образа няма Python и
+# билдът се проваля. Оттам двете мерки тук:
+#   * един повторен опит за инсталацията - при таймаут второто сваляне
+#     обикновено минава, а вече изтеглените пакети идват от store-а;
+#   * python3 и компилаторът в образа, за да е успешен и fallback-ът.
+# aptPkgs добавя към образа, без да пипа Node пакета, който nixpacks
+# избира сам от NIXPACKS_NODE_VERSION (nixPkgs тук би го презаписал).
+[phases.setup]
+aptPkgs = ["python3", "build-essential"]
+
 [phases.install]
 cmds = [
   "npm install -g corepack@0.24.1 && corepack enable",
-  "pnpm install --frozen-lockfile --prod=false",
+  "pnpm install --frozen-lockfile --prod=false || (echo 'повторен опит след неуспешна инсталация' && pnpm install --frozen-lockfile --prod=false)",
 ]

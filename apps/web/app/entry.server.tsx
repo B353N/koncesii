@@ -39,6 +39,23 @@ function csp(nonce: string): string {
 
 const CANONICAL_HOST = "koncesii.com";
 
+/**
+ * Един ред за всеки отговор 4xx/5xx: статус, път и User-Agent.
+ *
+ * На 17.09.2026 Search Console отчете 310 обхождания с 4XX за един ден,
+ * а нито Cloudflare (Free пази 3 дни), нито контейнерът (подменен при
+ * следващия деплой) пазеха следа. Стандартният лог на react-router-serve
+ * не носи User-Agent, а точно той казва дали е Googlebot.
+ */
+function logIfError(request: Request, status: number): void {
+  if (status < 400) return;
+  const url = new URL(request.url);
+  const ua = request.headers.get("user-agent") ?? "-";
+  console.warn(
+    `[http] ${status} ${request.method} ${url.pathname}${url.search} ua="${ua.replace(/"/g, "'")}"`,
+  );
+}
+
 export default function handleRequest(
   request: Request,
   responseStatusCode: number,
@@ -77,6 +94,8 @@ export default function handleRequest(
       '</openapi.json>; rel="service-desc", ' +
       '</methodology>; rel="service-doc"',
   );
+
+  logIfError(request, responseStatusCode);
 
   const nonce = randomBytes(16).toString("base64");
   responseHeaders.set("Content-Security-Policy", csp(nonce));

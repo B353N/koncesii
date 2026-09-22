@@ -21,7 +21,8 @@
     "start": "pnpm --filter web start",
     "ingest": "pnpm --filter etl ingest",
     "harvest:upload": "pnpm --filter etl upload",
-    "db:push": "pnpm --filter etl push"
+    "db:push": "pnpm --filter etl push",
+    "refresh": "node scripts/refresh.mjs"
   },
   "devDependencies": {
     "prettier": "^3.8.3",

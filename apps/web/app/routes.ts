@@ -15,6 +15,7 @@ export default [
   route("companies", "routes/companies.tsx"),
   route("companies.csv", "routes/companies-csv.ts"),
   route("companies/:eik", "routes/company-detail.tsx"),
+  route("changes", "routes/changes.tsx"),
   route("map", "routes/map.tsx"),
   route("map.geojson", "routes/map-geojson.ts"),
   route("flags", "routes/flags.tsx"),
@@ -22,6 +23,7 @@ export default [
   route("search", "routes/search.tsx"),
   route("methodology", "routes/methodology.tsx"),
   route("robots.txt", "routes/robots.ts"),
+  route("5ce6c3405a4f93fd10b9128f208b2052.txt", "routes/indexnow-key.ts"),
   route("sitemap.xml", "routes/sitemap.ts"),
   route("sitemap-pages.xml", "routes/sitemap-section.ts", {
     id: "sitemap-pages",

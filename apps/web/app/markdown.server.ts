@@ -8,6 +8,8 @@ import {
   SEVERITY_LABELS,
 } from "./format";
 import {
+  changeDates,
+  recentlyChanged,
   getCompany,
   getConcession,
   resolveConcession,
@@ -330,6 +332,26 @@ function mdMethodology(): string {
   );
 }
 
+/** „Промени": какво се е променило при последните снемания. */
+function mdChanges(): string {
+  const dates = changeDates().slice(0, 12);
+  const rows = recentlyChanged(LIST_LIMIT);
+  if (dates.length === 0)
+    return `# Промени\n\nПроследяването на промените започва със следващото снемане на регистрите.`;
+  return (
+    `# Промени в регистрите на концесиите\n\n` +
+    `Последно обновяване: **${dates[0]!.changed_at}**, засегнати ${dates[0]!.n} партиди. ` +
+    `Датата е на реалната промяна по партидата, не на снемането.\n\n` +
+    `## Снемания\n\n` +
+    table(
+      ["Дата", "Променени партиди"],
+      dates.map((d) => [d.changed_at, d.n]),
+    ) +
+    `\n\n## Последно променени партиди\n\n` +
+    concessionTable(rows)
+  );
+}
+
 function mdMap(): string {
   return (
     `# Карта на концесиите\n\n` +
@@ -357,6 +379,7 @@ export function renderMarkdown(url: URL): string | null {
   else if (path === "/flags") body = mdFlags(url);
   else if (path === "/methodology") body = mdMethodology();
   else if (path === "/map") body = mdMap();
+  else if (path === "/changes") body = mdChanges();
   else {
     const kind = seg("/concessions/vid/");
     const regNum = seg("/concessions/");

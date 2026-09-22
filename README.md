@@ -62,9 +62,17 @@
 Хранилището е пригодено за разработка в Devcontainer (Docker + редактор с поддръжка).
 
 ```bash
-pnpm setup    # еднократно: инсталиране + локална SQLite база + примерни данни
-pnpm dev      # ежедневно: приложението (и останалите пакети) паралелно
+pnpm setup      # еднократно: инсталиране + локална SQLite база + примерни данни
+pnpm dev        # ежедневно: приложението (и останалите пакети) паралелно
+pnpm test       # тестове на всички пакети
+pnpm typecheck  # типове
+pnpm lint       # форматиране (prettier --check)
+pnpm check:docs # цялост на документацията
+pnpm check:seo  # заглавия, описания, canonical и JSON-LD срещу работещ сайт
 ```
+
+`pnpm refresh` пуска целия цикъл по данните (harvest → качване → ingest →
+публикуване); подробностите са в [`docs/deploy.md`](docs/deploy.md).
 
 Първоначалното пълно извличане от регистрите (bootstrap) се прави с Python инструментите в [`tools/harvest/`](tools/harvest/) — от българско IP, защото регистрите режат datacenter адреси. Виж [`docs/etl.md`](docs/etl.md).
 

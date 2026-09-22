@@ -5,6 +5,7 @@ export { normText, NO_DATA_RE } from "./text";
 export { parseMoney, parseDecimal, eurFrom, type ParsedMoney } from "./money";
 export { parseTerm, type ParsedTerm } from "./term";
 export { extractEik } from "./eik";
+export { cleanConcessionaireName } from "./concessionaireName";
 export { classifyObjectKind } from "./objectKind";
 export { parseNkrExport, decodeWindows1251, type NkrExport } from "./nkrExport";
 export { parsePartida, previewMeta, type PartidaLinks } from "./nkrPartida";

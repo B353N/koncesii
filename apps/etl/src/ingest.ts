@@ -46,6 +46,21 @@ export function runIngest(
   previousPath: string | null = outPath,
 ): IngestResult {
   const snap: Snapshot = loadSnapshot(snapshotDir, date);
+  // Празен снапшот означава сгрешен път (--local се разрешава спрямо
+  // apps/etl, не спрямо корена). Без тази проверка ingest-ът успява с
+  // нула реда и db:push публикува празна база - отчетът съвпада, защото
+  // е изчислен от същия празен билд.
+  if (
+    snap.exportTsv === null &&
+    snap.indexRows.length === 0 &&
+    snap.lots.size === 0 &&
+    snap.egov.size === 0
+  ) {
+    throw new Error(
+      `[ingest] празен снапшот в ${snapshotDir} - няма nkr_data/ и data/. ` +
+        `Пътят на --local се разрешава спрямо текущата директория; подайте абсолютен път.`,
+    );
+  }
   // чете се преди createDatabase — тя трие изходния файл
   const previous = readPreviousState(previousPath);
   const db: Database.Database = createDatabase(outPath);

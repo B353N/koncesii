@@ -1,5 +1,6 @@
 import { Form, Link } from "react-router";
 import type { Route } from "./+types/home";
+import { POSTS, postMeta } from "../blog/posts";
 import { kindHref } from "../concessions-list";
 import { absUrl, ogDescriptors } from "../seo";
 import { concessionHref } from "../slug";
@@ -38,11 +39,12 @@ export function loader({}: Route.LoaderArgs) {
     longest: topByTerm(5),
     lowest: lowestPaymentRatio(5),
     grantors: topGrantors(12),
+    posts: POSTS.slice(0, 3).map(postMeta),
   };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { summary, kinds, longest, lowest, grantors } = loaderData;
+  const { summary, kinds, longest, lowest, grantors, posts } = loaderData;
   if (!summary) return <DataPending />;
 
   return (
@@ -145,6 +147,32 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           className="mt-2 inline-block text-[13px] text-water underline underline-offset-2"
         >
           Всички концеденти →
+        </Link>
+      </section>
+
+      <section className="mt-9">
+        <h2 className="font-display text-lg font-bold">Анализи</h2>
+        <p className="mb-2.5 text-xs text-stone">
+          какво казват данните, с числа от самата база
+        </p>
+        <ul className="grid gap-x-8 sm:grid-cols-3">
+          {posts.map((p) => (
+            <li key={p.slug} className="border-t border-limestone py-2">
+              <Link
+                to={`/blog/${p.slug}`}
+                className="text-[14px] text-water underline decoration-1 underline-offset-2"
+              >
+                {p.title}
+              </Link>
+              <span className="mt-0.5 block text-xs text-stone">{p.lead}</span>
+            </li>
+          ))}
+        </ul>
+        <Link
+          to="/blog"
+          className="mt-2 inline-block text-[13px] text-water underline underline-offset-2"
+        >
+          Всички анализи →
         </Link>
       </section>
 

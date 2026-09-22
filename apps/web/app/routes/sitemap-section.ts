@@ -5,6 +5,7 @@ import {
   listCompanies,
   listGrantors,
 } from "../queries.server";
+import { POSTS } from "../blog/posts";
 import { KIND_LABELS } from "../format";
 import { concessionHref } from "../slug";
 
@@ -32,6 +33,8 @@ type Section = (typeof SECTIONS)[number];
  */
 const STATIC_PAGES = new Set(["/methodology"]);
 
+/** Анализите се менят само с PR; числата в тях - с данните. */
+
 const PAGES = [
   "",
   "/concessions",
@@ -41,6 +44,8 @@ const PAGES = [
   "/map",
   "/flags",
   "/changes",
+  "/blog",
+  ...POSTS.map((post) => `/blog/${post.slug}`),
   "/methodology",
 ];
 

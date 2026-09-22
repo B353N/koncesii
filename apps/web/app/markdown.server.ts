@@ -23,6 +23,7 @@ import {
   listGrantors,
   type ConcessionRow,
 } from "./queries.server";
+import { POSTS } from "./blog/posts";
 import { concessionHref } from "./slug";
 
 /**
@@ -332,6 +333,18 @@ function mdMethodology(): string {
   );
 }
 
+/** „Анализи": заглавията и за какво са; самите текстове са HTML. */
+function mdBlog(): string {
+  return (
+    `# Анализи върху данните за концесиите\n\n` +
+    `Числата в текстовете идват от заявка към базата при отваряне на страницата.\n\n` +
+    POSTS.map(
+      (p) =>
+        `- [${p.title}](${BASE}/blog/${p.slug}) — ${p.lead} (${p.published})`,
+    ).join("\n")
+  );
+}
+
 /** „Промени": какво се е променило при последните снемания. */
 function mdChanges(): string {
   const dates = changeDates().slice(0, 12);
@@ -380,6 +393,7 @@ export function renderMarkdown(url: URL): string | null {
   else if (path === "/methodology") body = mdMethodology();
   else if (path === "/map") body = mdMap();
   else if (path === "/changes") body = mdChanges();
+  else if (path === "/blog") body = mdBlog();
   else {
     const kind = seg("/concessions/vid/");
     const regNum = seg("/concessions/");

@@ -15,6 +15,7 @@
     "lint": "prettier --check .",
     "format": "prettier --write .",
     "check:docs": "node scripts/check-docs.mjs",
+    "check:seo": "node scripts/check-seo.mjs",
     "check:docs:test": "node --test scripts/check-docs.test.mjs",
     "setup": "node scripts/setup.mjs",
     "start": "pnpm --filter web start",

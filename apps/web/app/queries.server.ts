@@ -362,6 +362,62 @@ export function listCompanies(): CompanyRow[] {
     .all();
 }
 
+/**
+ * Съседни партиди за детайлната страница: същият концедент и същият вид
+ * обект. Дава хоризонтални връзки между 1500+ страници, които иначе са
+ * достижими само от sitemap-а.
+ */
+export function relatedConcessions(
+  regNum: string,
+  limit = 6,
+): { byGrantor: ConcessionRow[]; byKind: ConcessionRow[] } {
+  const db = getDb();
+  if (!db) return { byGrantor: [], byKind: [] };
+  const seed = db
+    .prepare<
+      [string],
+      { id: string; grantor_id: string | null; kind: string | null }
+    >(
+      `SELECT c.id, c.grantor_id, (SELECT o.kind FROM objects o
+          WHERE o.concession_id = c.id ORDER BY o.seq LIMIT 1) AS kind
+       FROM concessions c WHERE c.reg_num = ?`,
+    )
+    .get(regNum);
+  if (!seed) return { byGrantor: [], byKind: [] };
+
+  const byGrantor = seed.grantor_id
+    ? withSlugs(
+        db,
+        db
+          .prepare<[string, string, number], ListRow>(
+            `${LIST_SQL} WHERE c.grantor_id = ? AND c.id <> ?
+             ORDER BY (c.annual_payment_eur IS NULL), c.annual_payment_eur DESC, c.reg_num
+             LIMIT ?`,
+          )
+          .all(seed.grantor_id, seed.id, limit),
+      )
+    : [];
+  const byKind = seed.kind
+    ? withSlugs(
+        db,
+        db
+          .prepare<[string, string, string | null, number], ListRow>(
+            `${LIST_SQL} WHERE o.kind = ? AND c.id <> ?
+             AND (c.grantor_id IS NULL OR c.grantor_id <> ?)
+             ORDER BY (c.annual_payment_eur IS NULL), c.annual_payment_eur DESC, c.reg_num
+             LIMIT ?`,
+          )
+          .all(seed.kind, seed.id, seed.grantor_id, limit),
+      )
+    : [];
+  return { byGrantor, byKind };
+}
+
+/** Концедентите с най-много партиди - за вътрешните връзки на началната. */
+export function topGrantors(limit: number): GrantorRow[] {
+  return listGrantors().slice(0, limit);
+}
+
 export function getCompany(eik: string) {
   const db = getDb();
   if (!db) return null;
@@ -432,6 +488,47 @@ export function kindCounts(): Array<{ kind: string; n: number }> {
       "SELECT kind, COUNT(*) AS n FROM objects GROUP BY kind ORDER BY n DESC",
     )
     .all();
+}
+
+export interface KindStats {
+  total: number;
+  grantors: number;
+  with_payment: number;
+  annual_sum: number | null;
+  with_term: number;
+  avg_term_months: number | null;
+  flagged: number;
+}
+
+/** Обобщение за страницата по вид обект: само числа от базата. */
+export function kindStats(kind: string): KindStats {
+  const empty: KindStats = {
+    total: 0,
+    grantors: 0,
+    with_payment: 0,
+    annual_sum: null,
+    with_term: 0,
+    avg_term_months: null,
+    flagged: 0,
+  };
+  const db = getDb();
+  if (!db) return empty;
+  return (
+    db
+      .prepare<[string], KindStats>(
+        `SELECT COUNT(*) AS total,
+                COUNT(DISTINCT c.grantor_id) AS grantors,
+                SUM(c.annual_payment_eur IS NOT NULL) AS with_payment,
+                SUM(c.annual_payment_eur) AS annual_sum,
+                SUM(c.term_months IS NOT NULL) AS with_term,
+                AVG(c.term_months) AS avg_term_months,
+                SUM(EXISTS (SELECT 1 FROM flags f WHERE f.concession_id = c.id)) AS flagged
+         FROM concessions c
+         JOIN objects o ON o.concession_id = c.id AND o.seq = 1
+         WHERE o.kind = ?`,
+      )
+      .get(kind) ?? empty
+  );
 }
 
 export function topByTerm(limit: number): ConcessionRow[] {

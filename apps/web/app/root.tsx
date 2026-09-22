@@ -10,6 +10,7 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { jsonLdScript, websiteJsonLd } from "./jsonLd";
 import { useNonce } from "./nonce";
 import "./app.css";
 
@@ -48,6 +49,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="twitter:card" content="summary_large_image" />
         <Meta />
         <Links />
+        {/* Сайтът като обект: WebSite + Organization, веднъж за всички страници. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={jsonLdScript(websiteJsonLd())}
+        />
         {import.meta.env.PROD && (
           <>
             <script

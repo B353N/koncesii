@@ -10,15 +10,22 @@ import {
 } from "../components";
 import { fmtMonths } from "../format";
 import { getSummary, listFlagCodes, listFlagged } from "../queries.server";
+import { absUrl, ogDescriptors, pageTitle } from "../seo";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Индикатори за риск — КОНЦЕСИИ" },
+    { title: pageTitle("Индикатори за риск по концесиите") },
     {
       name: "description",
       content:
         "Концесиите с индикатори за риск по публична, детерминистична методология. Всеки индикатор е възпроизводим аритметичен факт.",
     },
+    ...ogDescriptors({
+      title: "Индикатори за риск по концесиите",
+      description:
+        "Концесиите с индикатори за риск по публична, детерминистична методология. Всеки индикатор е възпроизводим аритметичен факт.",
+      url: absUrl("/flags"),
+    }),
     { tagName: "link", rel: "canonical", href: "https://koncesii.com/flags" },
   ];
 }

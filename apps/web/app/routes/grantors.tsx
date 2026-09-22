@@ -2,15 +2,22 @@ import { Link } from "react-router";
 import type { Route } from "./+types/grantors";
 import { DataPending, ExportLinks, PageTitle } from "../components";
 import { getSummary, listGrantors } from "../queries.server";
+import { absUrl, ogDescriptors, pageTitle } from "../seo";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Концеденти — КОНЦЕСИИ" },
+    { title: pageTitle("Концеденти: кой отдава концесии в България") },
     {
       name: "description",
       content:
         "Кой орган какво е отдал под концесия: общини и министерства с брой концесии и индикатори.",
     },
+    ...ogDescriptors({
+      title: "Концеденти: кой отдава концесии в България",
+      description:
+        "Кой орган какво е отдал под концесия: общини и министерства с брой концесии и индикатори.",
+      url: absUrl("/grantors"),
+    }),
     {
       tagName: "link",
       rel: "canonical",

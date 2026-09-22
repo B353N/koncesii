@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, rmSync } from "node:fs";
+import { copyFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -153,4 +153,59 @@ test("детерминизъм: същият снапшот дава байт-и
   const sha = (p: string) =>
     createHash("sha256").update(readFileSync(p)).digest("hex");
   expect(sha(second)).toBe(sha(dbPath));
+});
+
+test("промените се проследяват спрямо предишната база", () => {
+  const first = join(work, "changes-1.sqlite");
+  runIngest(snapshotDir, "2026-07-10", first, null);
+
+  const read = (path: string) => {
+    const db = new Database(path, { readonly: true });
+    const rows = db
+      .prepare(
+        "SELECT reg_num, content_hash, changed_at FROM concessions ORDER BY reg_num",
+      )
+      .all() as Array<{
+      reg_num: string;
+      content_hash: string;
+      changed_at: string;
+    }>;
+    db.close();
+    return rows;
+  };
+
+  const before = read(first);
+  expect(before.length).toBeGreaterThan(0);
+  expect(before.every((r) => r.changed_at === "2026-07-10")).toBe(true);
+  expect(before.every((r) => r.content_hash.length === 32)).toBe(true);
+
+  // същият снапшот на по-късна дата: нищо не се е променило, датите стоят
+  const second = join(work, "changes-2.sqlite");
+  const again = runIngest(snapshotDir, "2026-08-01", second, first);
+  expect(again.changes.changed).toBe(0);
+  expect(again.changes.added).toBe(0);
+  expect(again.changes.unchanged).toBe(before.length);
+  expect(read(second).every((r) => r.changed_at === "2026-07-10")).toBe(true);
+
+  // променено съдържание → новата дата
+  const edited = join(work, "changes-edited.sqlite");
+  copyFileSync(first, edited);
+  const w = new Database(edited);
+  w.prepare(
+    "UPDATE concessions SET content_hash = 'deadbeefdeadbeefdeadbeefdeadbeef' WHERE reg_num = 'O-000123'",
+  ).run();
+  w.close();
+  const third = join(work, "changes-3.sqlite");
+  const diff = runIngest(snapshotDir, "2026-08-01", third, edited);
+  expect(diff.changes.changed).toBe(1);
+  const changed = read(third).find((r) => r.reg_num === "O-000123");
+  expect(changed?.changed_at).toBe("2026-08-01");
+});
+
+test("без предишна база всичко е ново и с датата на снапшота", () => {
+  const only = join(work, "changes-fresh.sqlite");
+  const res = runIngest(snapshotDir, "2026-09-22", only, null);
+  expect(res.changes.unchanged).toBe(0);
+  expect(res.changes.changed).toBe(0);
+  expect(res.changes.added).toBe(report.tables["concessions"]);
 });

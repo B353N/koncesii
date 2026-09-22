@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import {
   classifyObjectKind,
+  cleanConcessionaireName,
   extractEik,
   normText,
   parseMoney,
@@ -224,9 +225,7 @@ export function unify(
   ): string | null => {
     const eikFromName = extractEik(name);
     // „„Гьошев ИН" ЕООД, ЕИК 202273601" → ЕИК-ът се показва отделно
-    const n = normText(name)
-      .replace(/[,;]?\s*(еик|булстат)[:.\s]*\d{9,13}/giu, "")
-      .replace(/[,;\s]+$/u, "");
+    const n = cleanConcessionaireName(name);
     if (!n || /^няма\s/iu.test(n)) return null;
     const eik = extractEik(eikRaw) ?? eikFromName;
     const id = eik ? `eik:${eik}` : `name:${slugify(n)}`;

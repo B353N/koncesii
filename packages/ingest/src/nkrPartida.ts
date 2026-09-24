@@ -13,6 +13,8 @@ export interface PartidaLinks {
   previewLinks: string[];
   /** /File/Download/{guid} и /Content/Download/… — договори и документи. */
   fileLinks: string[];
+  /** Същите линкове с текста им („Концесионен договор (PDF)") като заглавие. */
+  files: Array<{ href: string; title: string | null }>;
 }
 
 const PREVIEW_RE = /\/Preview\/[A-Za-z]+\/[0-9a-f-]{36}/gi;
@@ -22,18 +24,24 @@ export function parsePartida(html: string): PartidaLinks {
   const previewLinks = [...new Set(html.match(PREVIEW_RE) ?? [])].sort();
 
   const root = parse(html);
-  const fileLinks = [
-    ...new Set(
-      root
-        .querySelectorAll("a[href]")
-        .map((a) => a.getAttribute("href") ?? "")
-        .filter(
-          (href) =>
-            href.includes("/File/Download") ||
-            href.includes("/Content/Download"),
-        ),
-    ),
-  ].sort();
+  const titles = new Map<string, string | null>();
+  for (const a of root.querySelectorAll("a[href]")) {
+    const href = (a.getAttribute("href") ?? "").trim();
+    if (
+      !href.includes("/File/Download") &&
+      !href.includes("/Content/Download")
+    ) {
+      continue;
+    }
+    // без NFKC: „№" трябва да остане „№", не „No" — заглавието е дословно
+    const title = a.text.replace(/\s+/g, " ").trim();
+    if (!titles.has(href)) titles.set(href, title || null);
+  }
+  const fileLinks = [...titles.keys()].sort();
+  const files = fileLinks.map((href) => ({
+    href,
+    title: titles.get(href) ?? null,
+  }));
 
   let title: string | null = null;
   for (const node of root.querySelectorAll(
@@ -46,7 +54,7 @@ export function parsePartida(html: string): PartidaLinks {
     }
   }
 
-  return { title, previewLinks, fileLinks };
+  return { title, previewLinks, fileLinks, files };
 }
 
 /** GUID и видът на документа от Preview URL: /Preview/AssignedConcession/{guid}. */

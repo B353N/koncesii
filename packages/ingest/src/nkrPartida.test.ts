@@ -23,6 +23,16 @@ test("вади файловите линкове, но не навигацион
   ]);
 });
 
+test("пази текста на линка като заглавие на документа", () => {
+  expect(parsePartida(html).files).toEqual([
+    { href: "/Content/Download/reshenie-714.pdf", title: "Решение № 714" },
+    {
+      href: "/File/Download/aa11bb22-cc33-4d44-9e55-ff6677889900",
+      title: "Концесионен договор (PDF)",
+    },
+  ]);
+});
+
 test("намира заглавието на партидата", () => {
   expect(parsePartida(html).title).toBe("Партида на концесия O-000123");
 });

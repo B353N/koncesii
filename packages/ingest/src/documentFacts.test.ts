@@ -1,0 +1,187 @@
+import { describe, expect, test } from "vitest";
+import {
+  documentRank,
+  extractDocAmounts,
+  extractDocFacts,
+  normalizeDocText,
+  parseDocNumber,
+  splitPages,
+} from "./documentFacts";
+
+const one = (text: string) => extractDocFacts([text]);
+
+describe("parseDocNumber", () => {
+  test.each([
+    ["2 300,81", 2300.81],
+    ["1.500,00", 1500],
+    ["1.500", 1500],
+    ["1,500.00", 1500],
+    ["2300.81", 2300.81],
+    ["2.50", 2.5],
+    ["15000", 15000],
+    ["685,13", 685.13],
+  ])("%s → %d", (raw, v) => expect(parseDocNumber(raw)).toBe(v));
+});
+
+describe("normalizeDocText / splitPages", () => {
+  test("слепва пренесените думи и нормализира интервалите", () => {
+    expect(
+      normalizeDocText("годишно концеси-\nонно  възна-\n граждение\n\nот"),
+    ).toBe("годишно концесионно възнаграждение от");
+  });
+  test("form feed разделя страниците; празната опашка не е страница", () => {
+    expect(splitPages("а\fб\f")).toEqual(["а", "б"]);
+    expect(splitPages("само една")).toEqual(["само една"]);
+  });
+});
+
+describe("extractDocFacts", () => {
+  test("срок в години, със словом в скоби", () => {
+    const [f] = one(
+      "Чл. 3. Концесията се предоставя за срок от 25 (двадесет и пет) години, считано от датата на влизане в сила.",
+    );
+    expect(f).toMatchObject({
+      field: "term",
+      months: 300,
+      valueRaw: "25 (двадесет и пет) години",
+      priority: 1,
+      page: 1,
+    });
+    expect(f!.quote).toContain("срок от 25 (двадесет и пет) години");
+  });
+
+  test("срок в месеци", () => {
+    expect(one("Срокът на концесията е 420 месеца.")[0]).toMatchObject({
+      field: "term",
+      months: 420,
+    });
+  });
+
+  test("законов максимум и удължаване не са срокът", () => {
+    expect(
+      one("Срокът на концесията не може да бъде по-дълъг от 35 години."),
+    ).toEqual([]);
+    expect(one("Срокът на концесията може да се удължава с 5 години.")).toEqual(
+      [],
+    );
+    expect(one("Срокът на концесията е до 35 години.")).toEqual([]);
+  });
+
+  test("годишно възнаграждение с разделител на хилядите и словом", () => {
+    const facts = one(
+      "Годишното концесионно възнаграждение е в размер на 2 300,81 лв. (две хиляди и триста лева и 81 ст.) без ДДС.",
+    );
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({
+      field: "annual_payment",
+      amount: 2300.81,
+      currency: "BGN",
+      eur: 1176.39,
+      valueRaw: "2 300,81 лв.",
+    });
+  });
+
+  test("общата котва изисква „годишно“ около сумата", () => {
+    expect(
+      one(
+        "Концесионерът заплаща концесионно възнаграждение в размер на 4 500 лева годишно.",
+      )[0],
+    ).toMatchObject({ field: "annual_payment", amount: 4500 });
+    expect(
+      one(
+        "Концесионерът заплаща концесионно възнаграждение в размер на 4 500 лева по банков път.",
+      ),
+    ).toEqual([]);
+  });
+
+  test("еднократното не пълни годишното", () => {
+    const facts = one(
+      "Еднократното концесионно възнаграждение е 10 000 евро и се плаща при подписване.",
+    );
+    expect(facts.map((f) => f.field)).toEqual(["onetime_payment"]);
+    expect(facts[0]).toMatchObject({ currency: "EUR", eur: 10000 });
+  });
+
+  test("процент от приходите → payment_percent, не сума", () => {
+    const facts = one(
+      "Годишното концесионно възнаграждение е 4 % (четири на сто) от нетните приходи от продажби, но не по-малко от 3 000 лв.",
+    );
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({ field: "payment_percent", percent: 4 });
+  });
+
+  test("стойност на концесията в хиляди лева", () => {
+    expect(
+      one("Прогнозната стойност на концесията е 1 250 хил. лв. без ДДС.")[0],
+    ).toMatchObject({ field: "value", amount: 1_250_000, currency: "BGN" });
+  });
+
+  test("гаранции, минимални цени и цени на единица не са възнаграждението", () => {
+    expect(
+      one(
+        "Годишното концесионно възнаграждение се обезпечава с гаранция от 1 000 лв.",
+      ),
+    ).toEqual([]);
+    expect(
+      one("Минималното годишно концесионно възнаграждение е 800 лв."),
+    ).toEqual([]);
+    expect(
+      one("Годишното концесионно възнаграждение е 0,12 лв./кв.м площ."),
+    ).toEqual([]);
+  });
+
+  test("прозорецът спира при следващата клауза", () => {
+    expect(
+      one(
+        "Годишното концесионно възнаграждение се заплаща до 31 март. Чл. 8. Концесионерът внася 2 000 лв. такса.",
+      ),
+    ).toEqual([]);
+  });
+
+  test("гратисен период", () => {
+    expect(
+      one("Гратисният период е 2 (две) години от сключване на договора.")[0],
+    ).toMatchObject({ field: "grace_period", months: 24 });
+  });
+
+  test("страниците се номерират от 1 и фактите се подреждат по страница", () => {
+    const facts = extractDocFacts([
+      "Увод без стойности.",
+      "Срокът на концесията е 30 години.",
+    ]);
+    expect(facts[0]).toMatchObject({ page: 2, months: 360 });
+  });
+
+  test("детерминистично: същият текст дава същото извличане", () => {
+    const t = [
+      "Концесията се предоставя за срок от 35 години. Годишното концесионно възнаграждение е 1 500 лв.",
+    ];
+    expect(extractDocFacts(t)).toEqual(extractDocFacts(t));
+  });
+});
+
+describe("extractDocAmounts", () => {
+  test("всички суми с контекст и страница", () => {
+    const amounts = extractDocAmounts([
+      "Гаранция 1 000 лв. и такса 50 евро.",
+      "Общо: 2 300,81 лв.",
+    ]);
+    expect(amounts.map((a) => [a.page, a.amount, a.currency])).toEqual([
+      [1, 1000, "BGN"],
+      [1, 50, "EUR"],
+      [2, 2300.81, "BGN"],
+    ]);
+    expect(amounts[0]!.context).toContain("Гаранция 1 000 лв.");
+  });
+
+  test("номера на членове и дати не са суми", () => {
+    expect(extractDocAmounts(["Чл. 12, ал. 3 от 01.02.2020 г."])).toEqual([]);
+  });
+});
+
+test("documentRank: договорът е меродавен, анексите — последни", () => {
+  expect(documentRank("Концесионен договор (PDF)")).toBe(0);
+  expect(documentRank("Решение № 714")).toBe(2);
+  expect(documentRank("Анекс 1 към договора")).toBe(3);
+  expect(documentRank(null)).toBe(1);
+});

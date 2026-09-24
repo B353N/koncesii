@@ -36,6 +36,12 @@ describe("разпознаване без инструменти", () => {
     );
     expect(sniff(Buffer.from([0x50, 0x4b, 0x03, 0x04]), ".zip")).toBe("zip");
     expect(sniff(Buffer.from([0xff, 0xd8, 0xff, 0xe0]), "")).toBe("image");
+    expect(sniff(Buffer.from("Rar!\x1a\x07\x00", "latin1"), ".bin")).toBe(
+      "rar",
+    );
+    expect(sniff(Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]), "")).toBe(
+      "7z",
+    );
     expect(sniff(Buffer.from("<html>"), ".html")).toBe("unsupported");
   });
 
@@ -53,6 +59,49 @@ describe("разпознаване без инструменти", () => {
   });
 });
 
+describe("броячите и повторните опити, без инструменти", () => {
+  const dir = join(tmpdir(), `koncesii-extract-limit-${process.pid}`);
+  const nkr = join(dir, "nkr_data");
+  const none: Tools = {
+    pdftotext: null,
+    pdftoppm: null,
+    tesseract: null,
+    soffice: null,
+    unzip: null,
+    archiver: null,
+  };
+
+  beforeAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(join(nkr, "files", "lot"), { recursive: true });
+    const manifest = ["a", "b", "c"].map((id) => {
+      writeFileSync(join(nkr, "files", "lot", `${id}.html`), "<html></html>");
+      return JSON.stringify({
+        lot_guid: "lot",
+        href: `/File/Download/${id}`,
+        url: `https://nkr.government.bg/File/Download/${id}`,
+        title: id,
+        status: "ok",
+        file: `files/lot/${id}.html`,
+      });
+    });
+    writeFileSync(join(nkr, "files.jsonl"), manifest.join("\n") + "\n");
+  });
+
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  test("--limit: отрязаните чакат, не се броят за извлечени", async () => {
+    const r = await runExtract(dir, { tools: none, limit: 1 });
+    expect(r).toMatchObject({ files: 1, skipped: 0, remaining: 2 });
+    expect(r.byStatus).toEqual({ unsupported: 1 });
+  });
+
+  test("неподдържаният формат се опитва пак при следващото пускане", async () => {
+    const r = await runExtract(dir, { tools: none });
+    expect(r).toMatchObject({ files: 3, skipped: 0, remaining: 0 });
+  });
+});
+
 // Реалните инструменти (poppler, tesseract, LibreOffice) — на машината на
 // поддържащия ги има; в CI без тях тези тестове се прескачат.
 const tools: Tools = await detectTools();
@@ -67,6 +116,7 @@ describe.skipIf(!canPdf)("pnpm extract върху фикстурите", () => {
     ["contract.pdf", "aa11bb22-cc33-4d44-9e55-ff6677889900.pdf"],
     ["contract_scan.pdf", "scan0001.pdf"],
     ["contract.docx", "word0001.docx"],
+    ["contract.rar", "arch0001.rar"],
   ] as const;
   let summary: Awaited<ReturnType<typeof runExtract>>;
 
@@ -133,9 +183,21 @@ describe.skipIf(!canPdf)("pnpm extract върху фикстурите", () => {
     expect(text).toContain("Годишното концесионно възнаграждение");
   });
 
+  test.skipIf(!tools.archiver)("RAR: документът вътре се извлича", () => {
+    const { text, meta } = read(files[3][1]);
+    expect(meta).toMatchObject({ kind: "rar", status: "ok", pages: 2 });
+    expect(meta.entries).toEqual([
+      { name: "dogovor.pdf", first_page: 1, pages: 2 },
+    ]);
+    expect(text).toContain("Годишното концесионно възнаграждение");
+  });
+
   test("повторното пускане прескача извлечените", async () => {
     const again = await runExtract(dir, { tools });
-    expect(again.files).toBe(0);
-    expect(again.skipped).toBe(summary.files);
+    // неподдържаните и грешките се опитват пак; всичко друго се прескача
+    const retried =
+      (summary.byStatus["unsupported"] ?? 0) + (summary.byStatus["error"] ?? 0);
+    expect(again.files).toBe(retried);
+    expect(again.skipped).toBe(summary.files - retried);
   });
 });

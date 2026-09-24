@@ -374,3 +374,24 @@ export function ExportLinks({
     </div>
   );
 }
+
+/**
+ * Откъс от търсенето в документите: snippet() маркира съвпаденията с
+ * управляващи знаци, които тук стават <mark> — без innerHTML.
+ */
+export function Snippet({ text }: { text: string }) {
+  const parts = text.split(/(\u0001[^\u0002]*\u0002)/u);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith("\u0001") ? (
+          <mark key={i} className="bg-[#fff0b3] px-0.5 text-ink">
+            {p.slice(1, -1)}
+          </mark>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
+  );
+}

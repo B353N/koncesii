@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getDb } from "./db.server";
+import { FACT_ORDER } from "./format";
 import { buildSlugIndex, type SlugIndex } from "./slug";
 
 /**
@@ -316,7 +318,9 @@ export interface ConcessionDetail {
   grantor: { id: string; name: string } | null;
   concessionaire: { id: string; name: string; eik: string | null } | null;
   objects: ObjectRow[];
-  documents: Array<{ title: string | null; kind: string | null; url: string }>;
+  documents: DocumentRow[];
+  /** Клаузите, извлечени от документите (избраните + разминаванията). */
+  facts: FactRow[];
   payments: PaymentRow[];
   flags: Array<{ code: string; severity: string; inputs: string }>;
 }
@@ -357,14 +361,8 @@ export function getConcession(regNum: string): ConcessionDetail | null {
         "SELECT id, description, kind, kind_raw FROM objects WHERE concession_id = ? ORDER BY seq",
       )
       .all(id),
-    documents: db
-      .prepare<
-        [string],
-        { title: string | null; kind: string | null; url: string }
-      >(
-        "SELECT title, kind, url FROM documents WHERE concession_id = ? ORDER BY id",
-      )
-      .all(id),
+    documents: documentRows(db, id),
+    facts: factRows(db, id),
     payments: db
       .prepare<[string], PaymentRow>(
         "SELECT contracted_raw, contracted_eur, source_url FROM payments WHERE concession_id = ? ORDER BY id",
@@ -732,4 +730,310 @@ export function lowestPaymentRatio(
       )
       .all(limit),
   );
+}
+
+// ── Документите по партидата: текст, клаузи, търсене (E4) ────────────────
+
+export interface DocumentRow {
+  /** Стабилен ключ за адреса /concessions/<slug>/documents/<key>. */
+  key: string;
+  title: string | null;
+  kind: string | null;
+  /** Оригиналът в регистъра — винаги се показва до текста. */
+  url: string;
+  file_name: string | null;
+  size_bytes: number | null;
+  text_status: string | null;
+  text_method: string | null;
+  page_count: number | null;
+}
+
+export interface FactRow {
+  field: string;
+  value_raw: string;
+  value_eur: number | null;
+  term_months: number | null;
+  percent: number | null;
+  quote: string;
+  page: number;
+  outcome: string;
+  document_url: string;
+  document_key: string;
+  document_title: string | null;
+}
+
+/**
+ * Ключът на документа — същото правило като file_id в
+ * tools/harvest/nkr_scraper.py: GUID-ът от /File/Download/{guid}, иначе
+ * хеш на адреса. Не зависи от реда на редовете в базата, затова адресът на
+ * страницата с текста е стабилен между обновяванията.
+ */
+export function documentKey(url: string): string {
+  const m = /\/File\/Download\/([0-9a-f-]{36})/i.exec(url);
+  if (m) return m[1]!.toLowerCase();
+  let href = url;
+  try {
+    const u = new URL(url);
+    href = u.pathname + u.search;
+  } catch {
+    // относителен адрес — хешира се както е
+  }
+  return createHash("sha1").update(href).digest("hex").slice(0, 20);
+}
+
+/**
+ * Има ли базата текста на документите. Стара база без таблиците не бива
+ * да чупи сайта — секциите за текст и търсене просто липсват.
+ */
+const documentTextSupport = new WeakMap<Database.Database, boolean>();
+export function hasDocumentText(db: Database.Database): boolean {
+  let ok = documentTextSupport.get(db);
+  if (ok === undefined) {
+    ok =
+      (db
+        .prepare<[], { n: number }>(
+          "SELECT COUNT(*) AS n FROM sqlite_master WHERE name IN ('document_pages_fts', 'extracted_facts')",
+        )
+        .get()?.n ?? 0) === 2;
+    documentTextSupport.set(db, ok);
+  }
+  return ok;
+}
+
+function documentRows(
+  db: Database.Database,
+  concessionId: string,
+): DocumentRow[] {
+  const rows = hasDocumentText(db)
+    ? db
+        .prepare<[string], Omit<DocumentRow, "key">>(
+          `SELECT title, kind, url, file_name, size_bytes, text_status, text_method, page_count
+           FROM documents WHERE concession_id = ? ORDER BY id`,
+        )
+        .all(concessionId)
+    : db
+        .prepare<[string], Omit<DocumentRow, "key">>(
+          `SELECT title, kind, url, NULL AS file_name, NULL AS size_bytes,
+                  NULL AS text_status, NULL AS text_method, NULL AS page_count
+           FROM documents WHERE concession_id = ? ORDER BY id`,
+        )
+        .all(concessionId);
+  return rows.map((r) => ({ ...r, key: documentKey(r.url) }));
+}
+
+function factRows(
+  db: Database.Database,
+  concessionId: string,
+  documentUrl?: string,
+): FactRow[] {
+  if (!hasDocumentText(db)) return [];
+  const rows = db
+    .prepare<
+      [{ id: string; url: string | null }],
+      Omit<FactRow, "document_key">
+    >(
+      `SELECT e.field, e.value_raw, e.value_eur, e.term_months, e.percent, e.quote,
+              e.page, e.outcome, e.document_url, d.title AS document_title
+       FROM extracted_facts e JOIN documents d ON d.id = e.document_id
+       WHERE e.concession_id = @id AND (e.rank = 1 OR @url IS NOT NULL)
+         AND (@url IS NULL OR e.document_url = @url)
+       ORDER BY e.field, e.rank`,
+    )
+    .all({ id: concessionId, url: documentUrl ?? null });
+  const order = (f: string) => {
+    const i = FACT_ORDER.indexOf(f);
+    return i === -1 ? FACT_ORDER.length : i;
+  };
+  return rows
+    .map((r) => ({ ...r, document_key: documentKey(r.document_url) }))
+    .sort((a, b) => order(a.field) - order(b.field));
+}
+
+export interface DocumentText {
+  concession: { reg_num: string; title: string; slug: string };
+  document: DocumentRow;
+  pages: Array<{ page: number; method: string; text: string }>;
+  /** Всички кандидати от този документ, не само избраните. */
+  facts: FactRow[];
+}
+
+export function getDocumentText(
+  regNum: string,
+  key: string,
+): DocumentText | null {
+  const db = getDb();
+  if (!db || !hasDocumentText(db)) return null;
+  const c = db
+    .prepare<[string], { id: string; reg_num: string; title: string }>(
+      "SELECT id, reg_num, title FROM concessions WHERE reg_num = ?",
+    )
+    .get(regNum);
+  if (!c) return null;
+  const document = documentRows(db, c.id).find((d) => d.key === key);
+  if (!document) return null;
+  const docId = db
+    .prepare<[string, string], { id: number }>(
+      "SELECT id FROM documents WHERE concession_id = ? AND url = ? ORDER BY id LIMIT 1",
+    )
+    .get(c.id, document.url)?.id;
+  const pages =
+    docId == null
+      ? []
+      : db
+          .prepare<[number], { page: number; method: string; text: string }>(
+            "SELECT page, method, text FROM document_pages WHERE document_id = ? ORDER BY page",
+          )
+          .all(docId);
+  return {
+    concession: {
+      reg_num: c.reg_num,
+      title: c.title,
+      slug: slugIndex(db).slugOf(c.reg_num),
+    },
+    document,
+    pages,
+    facts: factRows(db, c.id, document.url),
+  };
+}
+
+/**
+ * Окончания на българските съществителни и прилагателни (членувани и в
+ * множествено число). FTS5 няма български stemmer, затова заявката търси
+ * по основата: „гратисен" → гратис* намира „гратисният", „години" →
+ * годин* намира „година". Само за заявката — индексът пази текста дословно.
+ */
+const BG_ENDINGS = [
+  "ията",
+  "ите",
+  "ата",
+  "ото",
+  "ъта",
+  "ята",
+  "ият",
+  "ия",
+  "ът",
+  "ят",
+  "ове",
+  "еве",
+  "ен",
+  "на",
+  "но",
+  "ни",
+  "та",
+  "то",
+  "те",
+  "и",
+  "а",
+  "о",
+  "е",
+  "я",
+  "ь",
+].sort((a, b) => b.length - a.length);
+
+export function bgStem(word: string): string {
+  const w = word.toLowerCase();
+  if (!/^[\u0400-\u04ff]+$/.test(w) || w.length < 5) return w;
+  for (const end of BG_ENDINGS) {
+    if (w.endsWith(end) && w.length - end.length >= 4) {
+      return w.slice(0, -end.length);
+    }
+  }
+  return w;
+}
+
+/**
+ * Потребителският текст → FTS5 заявка: всяка дума става префикс на
+ * основата си в кавички ("язовир"* съвпада с „язовира"), думите се
+ * свързват с И. Кавичките неутрализират синтаксиса на FTS5 — никакъв вход
+ * не стига до него суров.
+ */
+export function ftsQuery(q: string): string | null {
+  const words = q.normalize("NFKC").match(/[\p{L}\p{N}]+/gu) ?? [];
+  if (words.length === 0) return null;
+  return words
+    .slice(0, 12)
+    .map((w) => `"${bgStem(w)}"*`)
+    .join(" ");
+}
+
+/** Маркерите на snippet() — не могат да се появят в текст от PDF/OCR. */
+export const HIT_START = "\u0001";
+export const HIT_END = "\u0002";
+
+export interface DocumentHit {
+  reg_num: string;
+  slug: string;
+  concession_title: string;
+  document_key: string;
+  document_title: string | null;
+  document_url: string;
+  page: number;
+  method: string;
+  /** Откъс с маркери HIT_START/HIT_END около съвпаденията. */
+  snippet: string;
+}
+
+export function searchDocuments(
+  q: string,
+  limit = 50,
+): { hits: DocumentHit[]; total: number } {
+  const db = getDb();
+  const match = ftsQuery(q);
+  if (!db || !match || !hasDocumentText(db)) return { hits: [], total: 0 };
+  try {
+    const total =
+      db
+        .prepare<[string], { n: number }>(
+          "SELECT COUNT(*) AS n FROM document_pages_fts WHERE document_pages_fts MATCH ?",
+        )
+        .get(match)?.n ?? 0;
+    const rows = db
+      .prepare<[string, number], Omit<DocumentHit, "slug" | "document_key">>(
+        `SELECT c.reg_num, c.title AS concession_title, d.title AS document_title,
+                d.url AS document_url, p.page, p.method,
+                snippet(document_pages_fts, 0, char(1), char(2), '…', 24) AS snippet
+         FROM document_pages_fts
+         JOIN document_pages p ON p.id = document_pages_fts.rowid
+         JOIN documents d ON d.id = p.document_id
+         JOIN concessions c ON c.id = d.concession_id
+         WHERE document_pages_fts MATCH ?
+         ORDER BY bm25(document_pages_fts), c.reg_num, p.page
+         LIMIT ?`,
+      )
+      .all(match, limit);
+    return {
+      hits: withSlugs(db, rows).map((r) => ({
+        ...r,
+        document_key: documentKey(r.document_url),
+      })),
+      total,
+    };
+  } catch {
+    // неочаквана FTS грешка не бива да дава 500 на търсенето
+    return { hits: [], total: 0 };
+  }
+}
+
+/** Страниците с текст на документи за sitemap: slug, ключ, lastmod. */
+export function documentPagesForSitemap(): Array<{
+  slug: string;
+  key: string;
+  lastmod: string | null;
+}> {
+  const db = getDb();
+  if (!db || !hasDocumentText(db)) return [];
+  const idx = slugIndex(db);
+  const fresh = hasFreshness(db);
+  return db
+    .prepare<[], { reg_num: string; url: string; changed_at: string | null }>(
+      `SELECT c.reg_num, d.url, ${fresh ? "c.changed_at" : "NULL"} AS changed_at
+       FROM documents d JOIN concessions c ON c.id = d.concession_id
+       WHERE d.text_status = 'ok' GROUP BY c.reg_num, d.url ORDER BY c.reg_num, d.url`,
+    )
+    .all()
+    .map((r) => ({
+      slug: idx.slugOf(r.reg_num),
+      key: documentKey(r.url),
+      lastmod: r.changed_at,
+    }));
 }

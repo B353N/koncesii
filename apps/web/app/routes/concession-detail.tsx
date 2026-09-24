@@ -12,9 +12,13 @@ import { kindHref } from "../concessions-list";
 import {
   BGN_EUR_RATE,
   CONCESSION_KIND_LABELS,
+  FACT_LABELS,
+  FACT_OUTCOMES,
   FLAG_CONDITIONS,
   FLAG_DESCRIPTIONS,
+  fmtDocumentMeta,
   fmtEur,
+  fmtFact,
   fmtMonths,
   fmtPercent,
   KIND_LABELS,
@@ -532,27 +536,100 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         )}
       </Razdel>
 
+      {detail.facts.length > 0 && (
+        <Razdel num="IX·Д" title="Извлечено от документите">
+          <p className="max-w-[70ch] pb-2 text-[13px] text-stone">
+            Регистърът често казва „Няма въведени данни“, а стойностите са в
+            прикачените договори. Тук са клаузите, намерени в текста им по
+            публично описани правила — с дословния цитат, страницата и линк към
+            оригинала. Документът само попълва липсващо поле; при разминаване
+            стойността от регистъра остава и полето се отбелязва.{" "}
+            <Link
+              to="/methodology#izvlichane-ot-dokumentite"
+              className="text-water underline underline-offset-2"
+            >
+              Как се извлича →
+            </Link>
+          </p>
+          <ul className="grid gap-3 pb-2">
+            {detail.facts.map((f, i) => (
+              <li
+                key={i}
+                className="border-l-2 border-limestone pl-3 text-[13.5px]"
+              >
+                <span className="block text-xs text-stone">
+                  {FACT_LABELS[f.field] ?? f.field} ·{" "}
+                  {FACT_OUTCOMES[f.outcome] ?? f.outcome}
+                </span>
+                <b className="font-mono font-medium tabular-nums">
+                  {fmtFact(f)}
+                </b>
+                <span className="mt-0.5 block max-w-[72ch] italic break-words text-ink/80">
+                  „{f.quote}“
+                </span>
+                <span className="mt-0.5 block text-xs text-stone">
+                  {f.document_title ?? "документ"}, стр. {f.page} ·{" "}
+                  <Link
+                    to={`${concessionHref(detail.slug)}/documents/${f.document_key}#str-${f.page}`}
+                    className="text-water underline underline-offset-2"
+                  >
+                    текст
+                  </Link>{" "}
+                  ·{" "}
+                  <a
+                    href={f.document_url}
+                    rel="noopener"
+                    className="text-water underline underline-offset-2"
+                  >
+                    оригинал ↗
+                  </a>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Razdel>
+      )}
+
       <Razdel num="XI" title="Документи по партидата">
         {detail.documents.length > 0 ? (
           <ul className="pb-2 text-[13.5px]">
-            {detail.documents.map((d, i) => (
-              <li
-                key={i}
-                className="border-t border-dashed border-limestone py-2 first:border-t-0"
-              >
-                <a
-                  href={d.url}
-                  rel="noopener"
-                  className="text-water underline decoration-1 underline-offset-2"
+            {detail.documents.map((d, i) => {
+              const meta = fmtDocumentMeta(d);
+              return (
+                <li
+                  key={i}
+                  className="border-t border-dashed border-limestone py-2 first:border-t-0"
                 >
-                  {d.title ??
-                    (d.kind === "announcement"
-                      ? "Обявление"
-                      : `Документ ${i + 1}`)}{" "}
-                  ↗
-                </a>
-              </li>
-            ))}
+                  <a
+                    href={d.url}
+                    rel="noopener"
+                    className="text-water underline decoration-1 underline-offset-2"
+                  >
+                    {d.title ??
+                      (d.kind === "announcement"
+                        ? "Обявление"
+                        : `Документ ${i + 1}`)}{" "}
+                    ↗
+                  </a>
+                  {(meta || d.text_status === "ok") && (
+                    <span className="mt-0.5 block text-xs text-stone">
+                      {meta}
+                      {d.text_status === "ok" && (
+                        <>
+                          {meta ? " · " : ""}
+                          <Link
+                            to={`${concessionHref(detail.slug)}/documents/${d.key}`}
+                            className="text-water underline underline-offset-2"
+                          >
+                            Текстът на документа →
+                          </Link>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="pb-2 text-stone">Няма приложени документи.</p>

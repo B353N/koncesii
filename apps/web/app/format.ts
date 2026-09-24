@@ -148,3 +148,75 @@ export function csvResponse(filename: string, csv: string): Response {
     },
   });
 }
+
+/** Полетата, извличани от текста на документите (docs/document-extraction.md). */
+export const FACT_LABELS: Record<string, string> = {
+  term: "Срок",
+  annual_payment: "Годишно възнаграждение",
+  onetime_payment: "Еднократно възнаграждение",
+  value: "Стойност на концесията",
+  grace_period: "Гратисен период",
+  payment_percent: "Възнаграждение като дял от приходите",
+};
+
+/** Редът на показване: срок и пари отпред, както в паспорта на партидата. */
+export const FACT_ORDER = [
+  "term",
+  "value",
+  "annual_payment",
+  "payment_percent",
+  "onetime_payment",
+  "grace_period",
+];
+
+/** Какво е станало с извлечената стойност — дословно за читателя. */
+export const FACT_OUTCOMES: Record<string, string> = {
+  filled: "попълнено от документа — регистърът няма стойност",
+  agrees: "съвпада с регистъра",
+  conflict: "разминава се с регистъра — отбелязано, не поправено",
+  display: "само от документа",
+  alternative: "друг кандидат",
+};
+
+/** Извлечената стойност в четим вид: сумата в евро, срокът в месеци. */
+export function fmtFact(f: {
+  field: string;
+  value_eur: number | null;
+  term_months: number | null;
+  percent: number | null;
+  value_raw: string;
+}): string {
+  if (f.percent != null) return `${f.percent.toLocaleString("bg-BG")}%`;
+  if (f.term_months != null) return fmtMonths(f.term_months);
+  if (f.value_eur != null) return fmtEur(f.value_eur);
+  return f.value_raw;
+}
+
+/** „PDF · 2,4 MB · 12 стр. · OCR" — какво е файлът и как е прочетен. */
+export function fmtDocumentMeta(d: {
+  file_name: string | null;
+  url: string;
+  size_bytes: number | null;
+  page_count: number | null;
+  text_method: string | null;
+  text_status: string | null;
+}): string {
+  const ext = /\.([a-z0-9]{2,5})$/i.exec(d.file_name ?? d.url)?.[1];
+  const parts: string[] = [];
+  if (ext) parts.push(ext.toUpperCase());
+  if (d.size_bytes != null) {
+    parts.push(
+      d.size_bytes >= 1024 * 1024
+        ? `${(d.size_bytes / 1024 / 1024).toLocaleString("bg-BG", { maximumFractionDigits: 1 })} MB`
+        : `${Math.max(1, Math.round(d.size_bytes / 1024))} KB`,
+    );
+  }
+  if (d.page_count) parts.push(`${d.page_count} стр.`);
+  if (d.text_method === "ocr")
+    parts.push("сканиран, текстът е разпознат (OCR)");
+  if (d.text_method === "mixed") parts.push("част от страниците са с OCR");
+  if (d.text_status === "unsupported") parts.push("неподдържан формат");
+  if (d.text_status === "empty") parts.push("без разпознаваем текст");
+  if (d.text_status === "error") parts.push("текстът не можа да се извлече");
+  return parts.join(" · ");
+}

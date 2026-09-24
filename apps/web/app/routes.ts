@@ -7,6 +7,7 @@ export default [
   route("concessions/vid/:kind", "routes/concessions-kind.tsx"),
   route("concessions/:slug", "routes/concession-detail.tsx"),
   route("concessions/:slug/json", "routes/concession-json.ts"),
+  route("concessions/:slug/documents/:key", "routes/document-text.tsx"),
   // Стари адреси, в които "/" от партидния номер е станал нов сегмент
   route("concessions/*", "routes/concession-legacy.ts"),
   route("grantors", "routes/grantors.tsx"),
@@ -37,6 +38,9 @@ export default [
   }),
   route("sitemap-companies.xml", "routes/sitemap-section.ts", {
     id: "sitemap-companies",
+  }),
+  route("sitemap-documents.xml", "routes/sitemap-section.ts", {
+    id: "sitemap-documents",
   }),
   route("healthz", "routes/healthz.ts"),
   route("openapi.json", "routes/openapi.ts"),

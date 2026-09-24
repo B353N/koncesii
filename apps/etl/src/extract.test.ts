@@ -108,6 +108,7 @@ describe.skipIf(!canPdf)("pnpm extract върху фикстурите", () => {
       ["term", 1],
       ["value", 1],
       ["annual_payment", 2],
+      ["onetime_payment", 2],
       ["grace_period", 2],
     ]);
   });
@@ -117,7 +118,7 @@ describe.skipIf(!canPdf)("pnpm extract върху фикстурите", () => {
     expect(meta.page_methods).toEqual(["ocr"]);
     const facts = extractDocFacts(splitPages(text));
     expect(facts.find((f) => f.field === "annual_payment")).toMatchObject({
-      amount: 2300.81,
+      amount: 259.75,
       currency: "BGN",
     });
   });

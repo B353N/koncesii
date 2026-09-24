@@ -1,4 +1,11 @@
-import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  cpSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,6 +74,67 @@ export function buildFixtureSnapshot(dir: string): void {
     join(FIXTURES, "assigned_concession.html"),
     join(lotDir, `AssignedConcession_${FIXTURE_DOC_GUID}.html`),
   );
+
+  // Прикачените документи от партидата (tools/harvest етап files) и
+  // текстът им, както го оставя pnpm extract — ingest-ът чете само кеша,
+  // затова тестовете не изискват poppler/tesseract.
+  const nkr = join(dir, "nkr_data");
+  const files = [
+    {
+      href: "/File/Download/aa11bb22-cc33-4d44-9e55-ff6677889900",
+      title: "Концесионен договор (PDF)",
+      id: "aa11bb22-cc33-4d44-9e55-ff6677889900",
+      fixture: "contract",
+      methods: ["text", "text"],
+    },
+    {
+      href: "/Content/Download/reshenie-714.pdf",
+      title: "Решение № 714",
+      id: "87d87d5242a72672116a",
+      fixture: "contract_scan",
+      methods: ["ocr"],
+    },
+  ];
+  mkdirSync(join(nkr, "files", FIXTURE_LOT_GUID), { recursive: true });
+  mkdirSync(join(nkr, "text", FIXTURE_LOT_GUID), { recursive: true });
+  const manifest = files.map((f) => {
+    const file = `files/${FIXTURE_LOT_GUID}/${f.id}.pdf`;
+    const pdf = readFileSync(join(FIXTURES, `${f.fixture}.pdf`));
+    writeFileSync(join(nkr, file), pdf);
+    const sha256 = createHash("sha256").update(pdf).digest("hex");
+    const text = readFileSync(join(FIXTURES, `${f.fixture}.txt`), "utf8");
+    const pages = text.split("\f");
+    const base = join(nkr, "text", FIXTURE_LOT_GUID, f.id);
+    writeFileSync(`${base}.txt`, text);
+    writeFileSync(
+      `${base}.meta.json`,
+      JSON.stringify({
+        version: 1,
+        source_file: file,
+        source_sha256: sha256,
+        kind: "pdf",
+        status: "ok",
+        pages: pages.length,
+        chars: text.replace(/\s+/g, "").length,
+        page_methods: f.methods,
+        tools: { pdftotext: "fixture", tesseract: "fixture" },
+      }),
+    );
+    return JSON.stringify({
+      lot_guid: FIXTURE_LOT_GUID,
+      href: f.href,
+      url: `https://nkr.government.bg${f.href}`,
+      title: f.title,
+      status: "ok",
+      file,
+      filename: null,
+      content_type: "application/pdf",
+      size: pdf.length,
+      sha256,
+      fetched_at: `${FIXTURE_DATE}T10:00:00Z`,
+    });
+  });
+  writeFileSync(join(nkr, "files.jsonl"), manifest.join("\n") + "\n");
 
   const dsDir = join(dir, "data", "raw", "obshtina-smolyan-koncesii");
   mkdirSync(dsDir, { recursive: true });

@@ -190,12 +190,94 @@ CREATE INDEX idx_payments_concession ON payments (concession_id);
 CREATE TABLE documents (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   concession_id TEXT NOT NULL REFERENCES concessions (id),
-  title         TEXT,
+  title         TEXT,                   -- текстът на линка в партидата, дословно
   kind          TEXT,                   -- обявление / договор / решение / друго, по източника
-  url           TEXT NOT NULL,
-  published_at  TEXT
+  url           TEXT NOT NULL,          -- оригиналът в регистъра — винаги се показва
+  published_at  TEXT,
+
+  -- прикаченият файл и текстът му (docs/document-extraction.md, E1–E2);
+  -- NULL за обявленията, които са HTML страници
+  file_name     TEXT,                   -- името от сървъра (Content-Disposition)
+  content_type  TEXT,
+  size_bytes    INTEGER,
+  sha256        TEXT,                   -- на оригиналния файл в снапшота
+  text_status   TEXT CHECK (text_status IN
+                  ('ok', 'empty', 'unsupported', 'error', 'not_extracted', 'not_downloaded')),
+  text_method   TEXT CHECK (text_method IN ('text', 'ocr', 'mixed')),
+  page_count    INTEGER,
+  text_chars    INTEGER
 );
 CREATE INDEX idx_documents_concession ON documents (concession_id);
+
+-- Текстът на документите по страници: текстов слой (pdftotext) или OCR
+-- (tesseract), по страница. Цитатите и търсенето сочат страницата.
+CREATE TABLE document_pages (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id INTEGER NOT NULL REFERENCES documents (id),
+  page        INTEGER NOT NULL,         -- от 1
+  method      TEXT NOT NULL CHECK (method IN ('text', 'ocr', 'empty', 'needs_ocr')),
+  text        TEXT NOT NULL
+);
+CREATE UNIQUE INDEX idx_document_pages_doc ON document_pages (document_id, page);
+
+-- Пълнотекстов индекс върху страниците (external content — текстът не се
+-- дублира). unicode61 сгъва малки/главни и кирилицата; търсенето на сайта
+-- ползва префиксни заявки, защото няма български stemmer.
+CREATE VIRTUAL TABLE document_pages_fts USING fts5 (
+  text,
+  content = 'document_pages',
+  content_rowid = 'id',
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+
+-- Клаузи, извлечени детерминистично от текста (E3): всяко число носи
+-- документа, страницата и дословния цитат. outcome казва какво е станало
+-- с кандидата в unify (E4): 'filled' — попълнил е липсващо поле
+-- (flag 'parsed_from_text'); 'agrees' — съвпада с регистъра; 'conflict' —
+-- разминава се (полето става 'contradictory' + review_queue); 'display' —
+-- няма колона в модела (напр. процент от приходите), само се показва;
+-- 'alternative' — друг кандидат за същото поле, пази се за преглед.
+CREATE TABLE extracted_facts (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  concession_id TEXT NOT NULL REFERENCES concessions (id),
+  document_id   INTEGER NOT NULL REFERENCES documents (id),
+  field         TEXT NOT NULL CHECK (field IN
+                  ('term', 'annual_payment', 'onetime_payment', 'value',
+                   'grace_period', 'payment_percent')),
+  value_raw     TEXT NOT NULL,          -- „25 (двадесет и пет) години", „2 300,81 лв."
+  amount        REAL,                   -- в оригиналната валута
+  currency      TEXT CHECK (currency IN ('BGN', 'EUR')),
+  value_eur     REAL,
+  term_months   INTEGER,
+  percent       REAL,
+  quote         TEXT NOT NULL,
+  page          INTEGER NOT NULL,
+  document_url  TEXT NOT NULL,
+  anchor        TEXT NOT NULL,          -- котвата по методологията
+  priority      INTEGER NOT NULL,       -- 1 = пряка котва, 2 = по-обща
+  rank          INTEGER NOT NULL,       -- 1 = избраният кандидат за полето в партидата
+  outcome       TEXT NOT NULL CHECK (outcome IN
+                  ('filled', 'agrees', 'conflict', 'display', 'alternative')),
+  method        TEXT NOT NULL DEFAULT 'regex' CHECK (method IN ('regex', 'human_confirmed')),
+  extracted_at  TEXT NOT NULL
+);
+CREATE INDEX idx_extracted_facts_concession ON extracted_facts (concession_id, field, rank);
+
+-- Всяка парична сума в текста на документите, с контекст — „всички
+-- цифри" за търсене и сравнения; не влиза във формулите.
+CREATE TABLE document_amounts (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id   INTEGER NOT NULL REFERENCES documents (id),
+  concession_id TEXT NOT NULL REFERENCES concessions (id),
+  page          INTEGER NOT NULL,
+  value_raw     TEXT NOT NULL,
+  amount        REAL NOT NULL,
+  currency      TEXT NOT NULL CHECK (currency IN ('BGN', 'EUR')),
+  value_eur     REAL NOT NULL,
+  context       TEXT NOT NULL
+);
+CREATE INDEX idx_document_amounts_concession ON document_amounts (concession_id);
+CREATE INDEX idx_document_amounts_eur ON document_amounts (value_eur);
 
 -- Ръчна опашка за двусмислените dedup случаи (ADR-0003): разминаване източник↔НКР
 -- или несигурно свързване. Нищо не се решава мълчаливо.

@@ -564,6 +564,10 @@ def files():
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
+    STAGES = ("export", "index", "details", "parse", "files", "all")
+    if cmd not in STAGES:
+        # непознат етап не бива да минава тихо, без да направи нищо
+        sys.exit(f"непознат етап „{cmd}“; възможни: {', '.join(STAGES)}")
     if cmd in ("export", "all"):
         export()
     if cmd in ("index", "all"):

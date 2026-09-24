@@ -266,18 +266,41 @@ function windowAfter(text: string, from: number): string {
   return w;
 }
 
-/** Изречението около [start, end), най-много ~80 знака назад и ~60 напред. */
+/**
+ * Ново изречение: точка/;/!/? + интервал + главна буква, кавичка или
+ * номерирана алинея „(2)". „лв. (двеста…)" не е ново изречение.
+ */
+const SENTENCE_BREAK = String.raw`[.;!?]\s+(?=[\p{Lu}„"]|\(\d)`;
+
+/**
+ * Изречението около [start, end): от последната граница на изречение
+ * преди котвата (до ~120 знака назад) до първата след числото (до ~160
+ * напред). Многоточие отбелязва, че цитатът е отрязан.
+ */
 function quoteAround(text: string, start: number, end: number): string {
-  let a = Math.max(0, start - 80);
-  const back = text.slice(a, start);
-  const dot = back.search(/[.;:!?]\s+(?=[\p{Lu}\d„"])[^.;:!?]*$/u);
-  if (dot !== -1) a += dot + 1;
-  let b = Math.min(text.length, end + 60);
-  const fwd = text.slice(end, b);
-  const stop = fwd.search(/[;!?]|\.\s+(?=[\p{Lu}„"])/u);
-  if (stop !== -1) b = end + stop + 1;
+  const from = Math.max(0, start - 120);
+  // +1: границата точно преди котвата изисква да видим първата ѝ буква
+  const back = text.slice(from, start + 1);
+  let a = from;
+  let cutBack = from > 0;
+  for (const m of back.matchAll(new RegExp(SENTENCE_BREAK, "gu"))) {
+    const at = from + m.index + m[0].length;
+    if (at <= start) {
+      a = at;
+      cutBack = false;
+    }
+  }
+  if (from === 0) cutBack = false;
+
+  const to = Math.min(text.length, end + 160);
+  // напред: същата граница или краят на страницата
+  const stop = new RegExp(`${SENTENCE_BREAK}|[.;!?]\\s*$`, "u").exec(
+    text.slice(end, to),
+  );
+  const b = stop ? end + stop.index + 1 : to;
+  const cutFwd = !stop && to < text.length;
   const body = text.slice(a, b).trim();
-  return `${a > 0 ? "…" : ""}${body}${b < text.length ? "…" : ""}`;
+  return `${cutBack ? "…" : ""}${body}${cutFwd ? "…" : ""}`;
 }
 
 /** Извлечените клаузи от един документ, в реда на появяване. */

@@ -8,7 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractDocFacts, splitPages } from "ingest";
+import { extractDocFacts, normalizeDocText, splitPages } from "ingest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   detectTools,
@@ -102,7 +102,11 @@ describe.skipIf(!canPdf)("pnpm extract върху фикстурите", () => {
     const { text, meta } = read(files[0][1]);
     expect(meta).toMatchObject({ kind: "pdf", status: "ok", pages: 2 });
     expect(meta.page_methods).toEqual(["text", "text"]);
-    expect(text).toBe(readFileSync(join(FIXTURES, "contract.txt"), "utf8"));
+    // интервалите зависят от версията на poppler — сравнява се нормализирано
+    const norm = (t: string) => splitPages(t).map(normalizeDocText);
+    expect(norm(text)).toEqual(
+      norm(readFileSync(join(FIXTURES, "contract.txt"), "utf8")),
+    );
     const facts = extractDocFacts(splitPages(text));
     expect(facts.map((f) => [f.field, f.page])).toEqual([
       ["term", 1],

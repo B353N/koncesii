@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // Пълният цикъл за обновяване на данните, в една команда:
 //
-//   pnpm refresh [--date ГГГГ-ММ-ДД] [--skip-harvest] [--dry-run]
+//   pnpm refresh [--date ГГГГ-ММ-ДД] [--skip-harvest] [--skip-extract] [--dry-run]
 //
-//   1. harvest от НКР и data.egov.bg (часове; 1 заявка/сек, resumable)
-//   2. качване на снапшота на сървъра (rsync, идемпотентно)
-//   3. ingest → build/koncesii.sqlite + integrity отчет, сверен с
+//   1. harvest от НКР и data.egov.bg (часове; 1 заявка/сек, resumable),
+//      вкл. прикачените документи
+//   2. extract → текстът на документите (pdftotext; OCR за сканове);
+//      само новите файлове, вече извлечените се прескачат
+//   3. качване на снапшота на сървъра (rsync, идемпотентно)
+//   4. ingest → build/koncesii.sqlite + integrity отчет, сверен с
 //      предишната база (оттам идва changed_at → lastmod в sitemap-а)
-//   4. db:push → атомарна подмяна + известяване на IndexNow
+//   5. db:push → атомарна подмяна + известяване на IndexNow
 //
 // Пуска се от машина с **българско IP** (регистрите режат datacenter
 // адреси) - виж docs/etl.md. Стъпка 1 се прескача с --skip-harvest,
@@ -78,6 +81,13 @@ if (!has("--skip-harvest")) {
   });
 } else {
   log("- harvest прескочен (--skip-harvest)");
+}
+
+if (!has("--skip-extract")) {
+  // пътят се разрешава спрямо apps/etl, затова е абсолютен
+  run("текст на документите", "pnpm", ["extract", "--local", HARVEST]);
+} else {
+  log("- extract прескочен (--skip-extract)");
 }
 
 run("качване на снапшота", "pnpm", ["harvest:upload", "--date", date]);

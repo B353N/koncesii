@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type Database from "better-sqlite3";
 import { applyChangeTracking, readPreviousState } from "./changes";
 import { createDatabase } from "./db";
+import { ingestDocuments, type DocumentStats } from "./documents";
 import { loadSnapshot, type Snapshot } from "./snapshot";
 import { stageEgov, stageNkrExport, stageNkrLots } from "./staging";
 import { unify } from "./unify";
@@ -32,6 +33,8 @@ export interface IngestResult {
   mirrorsSkipped: number;
   /** Разбивка спрямо предишната база: нови / променени / непроменени. */
   changes: { added: number; changed: number; unchanged: number };
+  /** Документите: текст, страници, извлечени и приложени клаузи. */
+  documents: DocumentStats;
 }
 
 export function runIngest(
@@ -69,12 +72,22 @@ export function runIngest(
     let report!: IntegrityReport;
     let egov!: ReturnType<typeof stageEgov>;
     let changes!: ReturnType<typeof applyChangeTracking>;
+    let documents!: DocumentStats;
 
     db.transaction(() => {
       const nExport = stageNkrExport(db, snap);
       const lots = stageNkrLots(db, snap);
       egov = stageEgov(db, snap);
       const stats = unify(db, lots, date);
+      // текстът на документите попълва само останалите липсващи полета —
+      // преди индикаторите, за да влязат попълнените стойности във формулите
+      documents = ingestDocuments(db, snap, date);
+      console.log(
+        `[ingest] документи: ${documents.documents} файла, ${documents.withText} с текст, ` +
+          `${documents.pages} страници (${documents.ocrPages} с OCR), ` +
+          `клаузи: ${documents.facts} (попълнени ${documents.filled}, съвпадат ${documents.agrees}, ` +
+          `разминавания ${documents.conflicts}), суми: ${documents.amounts}`,
+      );
       const nFlags = deriveFlags(db, date);
 
       // свежест: кои партиди наистина са се променили спрямо предишната
@@ -154,6 +167,7 @@ export function runIngest(
       unmappedHeaders: Object.fromEntries(egov.unmapped),
       mirrorsSkipped: egov.mirrorsSkipped,
       changes,
+      documents,
     };
   } finally {
     db.close();
@@ -197,9 +211,15 @@ async function main() {
     date = snapshotDate;
     const { execFileSync } = await import("node:child_process");
     console.log(`[ingest] rsync ${remote} → ${dir}`);
-    execFileSync("rsync", ["-rtz", "--delete", remote, dir + "/"], {
-      stdio: "inherit",
-    });
+    // Оригиналите на документите (GB) не трябват на ingest — той чете
+    // само манифеста и текстовия кеш nkr_data/text/ от pnpm extract.
+    execFileSync(
+      "rsync",
+      ["-rtz", "--delete", "--exclude=/nkr_data/files/", remote, dir + "/"],
+      {
+        stdio: "inherit",
+      },
+    );
   } else {
     console.error(
       "употреба: pnpm ingest --local <dir> --date YYYY-MM-DD | --snapshot YYYY-MM-DD | --fixtures [--out <file>] [--previous <db> | --no-previous]",

@@ -360,8 +360,13 @@ export function unify(
       geo?.precision ?? null,
     );
 
-    for (const link of lot?.fileLinks ?? []) {
-      insDocument.run(id, null, "file", `https://nkr.government.bg${link}`);
+    for (const f of lot?.files ?? []) {
+      insDocument.run(
+        id,
+        f.title,
+        "file",
+        `https://nkr.government.bg${f.href}`,
+      );
     }
     for (const url of lot?.announcementUrls ?? []) {
       insDocument.run(

@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { readManifest, type ManifestRecord } from "./extract";
 
 /**
  * Снапшотът е директория с изхода на tools/harvest (docs/etl.md):
@@ -8,6 +9,8 @@ import { join } from "node:path";
  *   nkr_data/html/{guid}/{Вид}_{docguid}.html
  *   data/raw/{dataset_uri}/_dataset.json
  *   data/raw/{dataset_uri}/{resource_uri}.json
+ *   nkr_data/files.jsonl                     (манифест на свалените документи)
+ *   nkr_data/text/{guid}/{файл}.txt|.meta.json (текстът им, от pnpm extract)
  *
  * Единствената не-UTF-8 точка в цялата система е суровият НКР експорт —
  * така го връща регистърът. Декодираме го веднъж на входа; всичко след
@@ -23,6 +26,10 @@ export interface Snapshot {
   lots: Map<string, { partidaHtml: string | null; docs: Map<string, string> }>;
   /** dataset_uri → { meta, ресурси: resource_uri → payload } */
   egov: Map<string, { meta: unknown; resources: Map<string, unknown> }>;
+  /** nkr_data/ — текстът на документите се чете от там лениво, по файл. */
+  nkrDir: string;
+  /** URL на оригиналния документ → записът от манифеста на свалянето. */
+  files: Map<string, ManifestRecord>;
 }
 
 export function loadSnapshot(dir: string, date: string): Snapshot {
@@ -32,7 +39,17 @@ export function loadSnapshot(dir: string, date: string): Snapshot {
     indexRows: [],
     lots: new Map(),
     egov: new Map(),
+    nkrDir: join(dir, "nkr_data"),
+    files: new Map(),
   };
+
+  // Един и същи файл може да е закачен към няколко партиди — съдържанието
+  // е едно, първият (по партида) запис печели детерминистично.
+  for (const rec of readManifest(snap.nkrDir)) {
+    if (rec.status === "ok" && rec.file && !snap.files.has(rec.url)) {
+      snap.files.set(rec.url, rec);
+    }
+  }
 
   const indexPath = join(dir, "nkr_data", "index", "concessions.jsonl");
   if (existsSync(indexPath)) {

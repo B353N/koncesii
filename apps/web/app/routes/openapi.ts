@@ -60,7 +60,7 @@ const SPEC = {
     "/concessions/{slug}/json": {
       get: {
         summary:
-          "Пълните данни на една концесия: стойности с флагове за качество, обекти, документи, плащания, индикатори и източници",
+          "Пълните данни на една концесия: стойности с флагове за качество, обекти, документи (с метода на текста), извлечени от документите клаузи с цитат и страница (facts), плащания, индикатори и източници",
         parameters: [
           {
             name: "slug",
@@ -74,7 +74,7 @@ const SPEC = {
         responses: {
           "200": {
             description:
-              "Концесията; всяко парично поле носи *_raw (оригинала), *_eur (нормализирано, BGN→EUR по 1.95583) и *_flag (качество: ok/missing/parsed_from_text/contradictory)",
+              "Концесията; всяко парично поле носи *_raw (оригинала), *_eur (нормализирано, BGN→EUR по 1.95583) и *_flag (качество: ok/missing/parsed_from_text/contradictory); facts[] носи value_raw, quote, page, document_url и outcome (filled/agrees/conflict/display)",
             content: { "application/json": { schema: { type: "object" } } },
           },
           "404": { description: "Няма партида с този номер" },

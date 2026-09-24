@@ -10,12 +10,15 @@ nkr_scraper.py
              вади GUID-овете от скритите колони
   details  - за всеки GUID дърпа партидата + всички /Preview/ документи по нея
   parse    - извлича label/value структурата от Preview страниците в JSON
+  files    - сваля прикачените документи (договори, решения - PDF/DOC/сканове)
+             по всяка партида; текстът им се вади после с `pnpm extract`
 
 Употреба:
   python3 nkr_scraper.py export
   python3 nkr_scraper.py index
   python3 nkr_scraper.py details
   python3 nkr_scraper.py parse
+  python3 nkr_scraper.py files
   python3 nkr_scraper.py all
 
 Изход:
@@ -25,18 +28,24 @@ nkr_scraper.py
   nkr_data/html/{guid}/partida.html     - сурова партида
   nkr_data/html/{guid}/{doc_guid}.html  - сурови Preview документи
   nkr_data/parsed/{guid}.json           - структурирани данни по партида
+  nkr_data/files/{guid}/{file_id}.{ext} - прикачените документи, байт-точни
+  nkr_data/files.jsonl                  - манифест: 1 ред = 1 сваляне (URL,
+                                          заглавие от линка, тип, размер, sha256)
 
 Зависимости: pip install requests beautifulsoup4 lxml
 Учтивост: 1 заявка/сек. Сайтът реже datacenter IP-та - пускай от BG машина.
 """
 
 import csv
+import hashlib
 import json
+import mimetypes
 import re
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -46,6 +55,8 @@ OUT = Path("nkr_data")
 HTML_DIR = OUT / "html"
 IDX_DIR = OUT / "index"
 PARSED_DIR = OUT / "parsed"
+FILES_DIR = OUT / "files"
+FILES_MANIFEST = OUT / "files.jsonl"
 
 SLEEP = 1.0
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -356,9 +367,207 @@ def parse():
 
 
 # --------------------------------------------------------------------------
+# Етап 4: FILES - прикачените документи (docs/document-extraction.md, E1)
+# --------------------------------------------------------------------------
+
+FILE_LINK_RE = re.compile(r"/(File|Content)/Download", re.IGNORECASE)
+GUID_TAIL_RE = re.compile(r"/File/Download/([0-9a-f-]{36})", re.IGNORECASE)
+
+# Разширение по Content-Type, когато сървърът не подаде име на файл.
+EXT_BY_TYPE = {
+    "application/pdf": ".pdf",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/rtf": ".rtf",
+    "text/rtf": ".rtf",
+    "application/vnd.ms-excel": ".xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.oasis.opendocument.text": ".odt",
+    "application/zip": ".zip",
+    "application/x-zip-compressed": ".zip",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/tiff": ".tif",
+}
+
+
+def partida_file_links(html: str) -> list[dict]:
+    """Линковете към файлове в партидата, с текста на линка като заглавие.
+    Същото правило като parsePartida в packages/ingest."""
+    soup = BeautifulSoup(html, "lxml")
+    out, seen = [], set()
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        if not FILE_LINK_RE.search(href) or href in seen:
+            continue
+        seen.add(href)
+        title = re.sub(r"\s+", " ", a.get_text(" ")).strip() or None
+        out.append({"href": href, "title": title})
+    return sorted(out, key=lambda r: r["href"])
+
+
+def file_id(href: str) -> str:
+    """Стабилно име на файла: GUID-ът на НКР, иначе хеш на адреса."""
+    m = GUID_TAIL_RE.search(href)
+    if m:
+        return m.group(1).lower()
+    return hashlib.sha1(href.encode("utf-8")).hexdigest()[:20]
+
+
+def disposition_filename(header: str | None) -> str | None:
+    """Името от Content-Disposition, вкл. RFC 5987 (filename*=UTF-8''...)."""
+    if not header:
+        return None
+    m = re.search(r"filename\*\s*=\s*([^']*)'[^']*'([^;]+)", header, re.IGNORECASE)
+    if m:
+        try:
+            return unquote(m.group(2).strip().strip('"'), encoding=m.group(1) or "utf-8")
+        except LookupError:
+            return unquote(m.group(2).strip().strip('"'))
+    m = re.search(r'filename\s*=\s*"?([^";]+)"?', header, re.IGNORECASE)
+    if not m:
+        return None
+    name = m.group(1).strip()
+    # ASP.NET понякога праща кирилицата като latin-1 байтове
+    try:
+        name = name.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        pass
+    return name
+
+
+def file_ext(filename: str | None, content_type: str | None, head: bytes) -> str:
+    if filename:
+        suffix = Path(filename).suffix.lower()
+        if re.fullmatch(r"\.[a-z0-9]{1,5}", suffix):
+            return suffix
+    ctype = (content_type or "").split(";")[0].strip().lower()
+    if ctype in EXT_BY_TYPE:
+        return EXT_BY_TYPE[ctype]
+    if head.startswith(b"%PDF"):
+        return ".pdf"
+    return mimetypes.guess_extension(ctype) or ".bin"
+
+
+def load_manifest() -> dict[tuple[str, str], dict]:
+    """(партида, href) → последният запис. Манифестът е append-only."""
+    done: dict[tuple[str, str], dict] = {}
+    if FILES_MANIFEST.exists():
+        for line in FILES_MANIFEST.read_text("utf-8").splitlines():
+            if line.strip():
+                rec = json.loads(line)
+                done[(rec["lot_guid"], rec["href"])] = rec
+    return done
+
+
+def download_file(s: requests.Session, lot_guid: str, link: dict) -> dict:
+    href = link["href"]
+    url = urljoin(BASE, href)
+    rec = {
+        "lot_guid": lot_guid,
+        "href": href,
+        "url": url,
+        "title": link["title"],
+        "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    lot_dir = FILES_DIR / lot_guid
+    lot_dir.mkdir(parents=True, exist_ok=True)
+    fid = file_id(href)
+    part = lot_dir / f"{fid}.part"
+    for attempt in range(1, 5):
+        try:
+            with s.get(url, timeout=180, stream=True,
+                       headers={"X-Requested-With": ""}) as r:
+                if r.status_code in (429, 503):
+                    time.sleep(20 * attempt)
+                    continue
+                if r.status_code >= 400:
+                    rec.update(status="error", error=f"HTTP {r.status_code}")
+                    time.sleep(SLEEP)
+                    return rec
+                sha = hashlib.sha256()
+                size = 0
+                head = b""
+                with part.open("wb") as out:
+                    for chunk in r.iter_content(chunk_size=1 << 16):
+                        if not chunk:
+                            continue
+                        if len(head) < 16:
+                            head += chunk[:16]
+                        sha.update(chunk)
+                        size += len(chunk)
+                        out.write(chunk)
+                filename = disposition_filename(r.headers.get("Content-Disposition"))
+                ctype = r.headers.get("Content-Type")
+            ext = file_ext(filename, ctype, head)
+            final = lot_dir / f"{fid}{ext}"
+            part.replace(final)
+            rec.update(
+                status="ok",
+                file=final.relative_to(OUT).as_posix(),
+                filename=filename,
+                content_type=ctype,
+                size=size,
+                sha256=sha.hexdigest(),
+            )
+            time.sleep(SLEEP)
+            return rec
+        except requests.RequestException as e:
+            if attempt == 4:
+                rec.update(status="error", error=str(e)[:300])
+                return rec
+            print(f"  [!] {url}: {e} - ретрай {attempt}")
+            time.sleep(10 * attempt)
+    rec.update(status="error", error="retries exhausted")
+    return rec
+
+
+def files():
+    """Сваля всеки /File/Download и /Content/Download от партидите.
+    Възобновимо: успешно свалените (по манифеста и на диска) се прескачат,
+    грешките се опитват отново при следващото пускане."""
+    FILES_DIR.mkdir(parents=True, exist_ok=True)
+    done = load_manifest()
+    todo: list[tuple[str, dict]] = []
+    for gdir in sorted(HTML_DIR.iterdir()) if HTML_DIR.exists() else []:
+        partida = gdir / "partida.html"
+        if not gdir.is_dir() or not partida.exists():
+            continue
+        for link in partida_file_links(partida.read_text("utf-8", errors="replace")):
+            prev = done.get((gdir.name, link["href"]))
+            if prev and prev.get("status") == "ok" and (OUT / prev["file"]).exists():
+                continue
+            todo.append((gdir.name, link))
+    print(f"[files] за сваляне: {len(todo)} (вече свалени: "
+          f"{sum(1 for r in done.values() if r.get('status') == 'ok')})")
+    if not todo:
+        return
+
+    s = make_session()
+    ok = err = 0
+    with FILES_MANIFEST.open("a", encoding="utf-8") as manifest:
+        for n, (lot_guid, link) in enumerate(todo, 1):
+            rec = download_file(s, lot_guid, link)
+            manifest.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            manifest.flush()
+            if rec["status"] == "ok":
+                ok += 1
+            else:
+                err += 1
+                print(f"[files][!] {rec['url']}: {rec.get('error')}")
+            if n % 25 == 0:
+                print(f"[files] {n}/{len(todo)}")
+    print(f"[files] готово: {ok} свалени, {err} грешки -> {FILES_DIR}")
+
+
+# --------------------------------------------------------------------------
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
+    STAGES = ("export", "index", "details", "parse", "files", "all")
+    if cmd not in STAGES:
+        # непознат етап не бива да минава тихо, без да направи нищо
+        sys.exit(f"непознат етап „{cmd}“; възможни: {', '.join(STAGES)}")
     if cmd in ("export", "all"):
         export()
     if cmd in ("index", "all"):
@@ -367,3 +576,5 @@ if __name__ == "__main__":
         details()
     if cmd in ("parse", "all"):
         parse()
+    if cmd in ("files", "all"):
+        files()

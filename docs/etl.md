@@ -52,15 +52,17 @@ Tapestry приложение с последователни числови ID-
 ### 5. Отчети за изпълнение (v2)
 
 Годишните отчети на концедентите (чл. 45/чл. 132 ЗК) и докладите на АППК носят
-„реално платено" срещу „договорено" — но са PDF-и на парче. Планирани за v2 с
-PDF extraction опашка.
+„реално платено" срещу „договорено" — но са PDF-и на парче. Планирани за v2 — върху
+същия конвейер за документи (виж по-долу).
 
 ## Двустепенното извличане ([ADR-0002](adr/0002-two-stage-ingest.md))
 
 ```
 Стъпка A (bootstrap, ръчна, BG IP):
-  tools/harvest/nkr_scraper.py all          → nkr_data/   (сурови HTML + parsed JSON)
+  tools/harvest/nkr_scraper.py all          → nkr_data/   (сурови HTML + parsed JSON
+                                                           + files/: прикачените документи)
   tools/harvest/egov_concessions_harvest.py → data/       (сурови JSON + normalized JSONL)
+  pnpm extract --local tools/harvest        → nkr_data/text/ (текстът на документите, с OCR)
   pnpm harvest:upload                       → сървъра: /data/koncesii/snapshots/YYYY-MM-DD/…
                                               (rsync през SSH, идемпотентно и възобновимо)
 
@@ -79,6 +81,7 @@ PDF extraction опашка.
 
 | Команда                                 | Какво прави                                                                                               |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `pnpm extract --local <dir>`            | текстът на прикачените документи → `nkr_data/text/` (pdftotext; OCR за сканове; LibreOffice за Word)      |
 | `pnpm harvest:upload --date ГГГГ-ММ-ДД` | качва изхода на tools/harvest на сървъра (rsync, идемпотентно: `--checksum`, resumable)                   |
 | `pnpm ingest --snapshot ГГГГ-ММ-ДД`     | тегли снапшота от сървъра → staging → unify → флагове → `build/koncesii.sqlite` + integrity отчет         |
 | `pnpm ingest --local <dir> --date …`    | същото, но директно от локалния изход на tools/harvest (**абсолютен път** - разрешава се спрямо apps/etl) |
@@ -87,6 +90,24 @@ PDF extraction опашка.
 
 Ingest-ът е **детерминистичен**: същият снапшот дава байт-идентична база (датата влиза от
 снапшота, не от часовника).
+
+### Документите: сваляне → текст → база
+
+Структурираните полета на НКР масово са празни, а стойностите живеят в прикачените
+договори — затова документите минават през три стъпки (подробно:
+[`document-extraction.md`](document-extraction.md)):
+
+| Стъпка                       | Изход в снапшота                                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `nkr_scraper.py files`       | `nkr_data/files/{партида}/{файл}` — байт-точни; `nkr_data/files.jsonl` — URL, заглавие, тип, sha256   |
+| `pnpm extract --local <dir>` | `nkr_data/text/{партида}/{файл}.txt` (страници, разделени с form feed) + `.meta.json` (метод, версии) |
+| `pnpm ingest` (автоматично)  | `documents`, `document_pages` + FTS5, `extracted_facts`, `document_amounts`; попълва липсващи полета  |
+
+`pnpm extract` иска poppler (`pdftotext`, `pdftoppm`), за сканираните страници — `tesseract`
+с български език, за Word/RTF — LibreOffice (`soffice`). Паралелно е (`--jobs N`) и
+възобновимо: вече извлечен файл със същия sha256 и версия на правилата се прескача.
+Ingest-ът чете **само кеша** — не пуска инструментите, затова остава детерминистичен.
+`ingest --snapshot` не тегли оригиналните файлове от сървъра (гигабайти), само текста.
 
 ### Свежест: кога се е променила партидата
 

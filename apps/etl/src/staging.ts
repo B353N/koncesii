@@ -58,6 +58,8 @@ export interface StagedLot {
   guid: string;
   regNum: string | null;
   fileLinks: string[];
+  /** Файловете с текста на линка като заглавие. */
+  files: Array<{ href: string; title: string | null }>;
   announcementUrls: string[];
 }
 
@@ -77,11 +79,13 @@ export function stageNkrLots(
   )) {
     let regNum: string | null = null;
     let fileLinks: string[] = [];
+    let files: StagedLot["files"] = [];
     const announcementUrls: string[] = [];
 
     if (lot.partidaHtml) {
       const partida = parsePartida(lot.partidaHtml);
       fileLinks = partida.fileLinks;
+      files = partida.files;
       const m = partida.title ? PARTIDA_REG_RE.exec(partida.title) : null;
       regNum = m?.[1] ?? null;
     }
@@ -108,7 +112,7 @@ export function stageNkrLots(
       }
     }
 
-    lots.push({ guid, regNum, fileLinks, announcementUrls });
+    lots.push({ guid, regNum, fileLinks, files, announcementUrls });
   }
   return lots;
 }

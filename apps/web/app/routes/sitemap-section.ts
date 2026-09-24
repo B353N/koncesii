@@ -1,6 +1,7 @@
 import {
   allConcessionSlugs,
   concessionLastmod,
+  documentPagesForSitemap,
   getSummary,
   listCompanies,
   listGrantors,
@@ -15,6 +16,7 @@ export const SECTIONS = [
   "concessions",
   "grantors",
   "companies",
+  "documents",
 ] as const;
 export const XML_HEADERS = {
   "Content-Type": "application/xml; charset=utf-8",
@@ -86,12 +88,18 @@ function urlsFor(section: Section): SitemapEntry[] {
           loc: `${BASE}/companies/${encodeURIComponent(c.eik!)}`,
           lastmod: dataDate,
         }));
+    case "documents":
+      // текстът на договорите/решенията - lastmod е този на партидата
+      return documentPagesForSitemap().map((d) => ({
+        loc: `${BASE}${concessionHref(d.slug)}/documents/${d.key}`,
+        lastmod: d.lastmod ?? undefined,
+      }));
   }
 }
 
 /**
  * Resource route: /sitemap-<section>.xml — urlset за една секция.
- * Една и съща route файл е закачен на четири пътя (виж routes.ts);
+ * Една и съща route файл е закачен на пет пътя (виж routes.ts);
  * секцията се чете от pathname.
  */
 export function loader({ request }: { request: Request }) {

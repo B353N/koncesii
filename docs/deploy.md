@@ -42,26 +42,36 @@
 адреси; сървърът не скрейпва никога). Пълният цикъл:
 
 ```bash
-# 1. Harvest (часове; учтиво: 1 заявка/сек, resumable)
+# 1. Harvest (часове; учтиво: 1 заявка/сек, resumable) — вкл. прикачените документи
 cd tools/harvest
 .venv/bin/python nkr_scraper.py all
 .venv/bin/python egov_concessions_harvest.py all
 
-# 2. Снапшотът отива на сървъра (идемпотентно, immutable датиран префикс)
+# 2. Текстът на документите (локално; OCR за сканираните — часове при първото пускане)
+cd ../..
+pnpm extract --local "$PWD/tools/harvest"
+
+# 3. Снапшотът отива на сървъра (идемпотентно, immutable датиран префикс)
 pnpm harvest:upload --date ГГГГ-ММ-ДД
 
-# 3. Билд на базата + integrity отчет (детерминистично)
+# 4. Билд на базата + integrity отчет (детерминистично)
 pnpm ingest --snapshot ГГГГ-ММ-ДД     # или --local tools/harvest --date …
 
-# 4. Публикуване: проверка на отчета → sha256 сверка → атомарна подмяна
+# 5. Публикуване: проверка на отчета → sha256 сверка → атомарна подмяна
 pnpm db:push
 ```
 
-Или накратко, целият цикъл в една команда (същите четири стъпки, с лог в
+Инструментите за стъпка 2 се слагат веднъж: `brew install poppler tesseract
+tesseract-lang` и `brew install --cask libreoffice` (Word/RTF документите). Без
+tesseract сканираните страници остават без текст и се опитват отново при следващото
+пускане.
+
+Или накратко, целият цикъл в една команда (същите пет стъпки, с лог в
 `build/refresh-ГГГГ-ММ-ДД.log`):
 
 ```bash
-pnpm refresh                      # днешна дата; --skip-harvest пропуска стъпка 1
+pnpm refresh                      # днешна дата; --skip-harvest пропуска стъпка 1,
+                                  # --skip-extract - стъпка 2
 ```
 
 Сайтът засича новия файл без рестарт. Rollback: предишният `koncesii.sqlite`

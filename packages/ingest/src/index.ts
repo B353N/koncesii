@@ -25,3 +25,15 @@ export {
   type NormalizedResource,
   type HeaderMapping,
 } from "./egov";
+export {
+  ANCHORS,
+  documentRank,
+  extractDocAmounts,
+  extractDocFacts,
+  normalizeDocText,
+  parseDocNumber,
+  splitPages,
+  type DocAmount,
+  type DocFact,
+  type DocFactField,
+} from "./documentFacts";

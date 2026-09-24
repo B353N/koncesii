@@ -78,9 +78,14 @@ const PROJECTION_SQL = `
          (SELECT group_concat(o.kind || '|' || o.description, '§')
             FROM (SELECT kind, description FROM objects
                    WHERE concession_id = c.id ORDER BY seq) o) AS objects,
-         (SELECT group_concat(d.url, '§')
-            FROM (SELECT url FROM documents
+         (SELECT group_concat(d.url || '|' || coalesce(d.title, '') || '|' ||
+                              coalesce(d.sha256, '') || '|' || coalesce(d.page_count, ''), '§')
+            FROM (SELECT url, title, sha256, page_count FROM documents
                    WHERE concession_id = c.id ORDER BY url) d) AS documents,
+         (SELECT group_concat(e.field || '|' || e.value_raw || '|' || e.page || '|' ||
+                              e.outcome || '|' || e.quote, '§')
+            FROM (SELECT field, value_raw, page, outcome, quote FROM extracted_facts
+                   WHERE concession_id = c.id AND rank = 1 ORDER BY field) e) AS extracted,
          (SELECT group_concat(f.code || '|' || f.inputs, '§')
             FROM (SELECT code, inputs FROM flags
                    WHERE concession_id = c.id ORDER BY code) f) AS flags,

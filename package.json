@@ -20,6 +20,7 @@
     "setup": "node scripts/setup.mjs",
     "start": "pnpm --filter web start",
     "ingest": "pnpm --filter etl ingest",
+    "extract": "pnpm --filter etl extract",
     "harvest:upload": "pnpm --filter etl upload",
     "db:push": "pnpm --filter etl push",
     "refresh": "node scripts/refresh.mjs"

@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "ingest": "tsx src/ingest.ts",
+    "extract": "tsx src/extract.ts",
     "upload": "tsx src/upload.ts",
     "push": "tsx src/push.ts",
     "test": "vitest run"

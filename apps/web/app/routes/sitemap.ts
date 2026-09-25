@@ -1,5 +1,5 @@
 import { getSummary } from "../queries.server";
-import { BASE, SECTIONS, sectionSize, XML_HEADERS } from "./sitemap-section";
+import { BASE, SECTIONS, sectionSize, XML_HEADERS } from "../sitemap.server";
 
 /**
  * Resource route: /sitemap.xml — sitemap index, който сочи към по една

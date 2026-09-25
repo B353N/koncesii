@@ -5,6 +5,7 @@ import {
   getSummary,
   listCompanies,
   listGrantors,
+  listMunicipalities,
 } from "../queries.server";
 import { POSTS } from "../blog/posts";
 import { KIND_LABELS } from "../format";
@@ -15,6 +16,7 @@ import {
   documentHref,
   grantorHref,
   kindHref,
+  municipalityHref,
   PATHS,
 } from "../paths";
 
@@ -24,6 +26,7 @@ export const SECTIONS = [
   "concessions",
   "grantors",
   "companies",
+  "municipalities",
   "documents",
 ] as const;
 export const XML_HEADERS = {
@@ -50,6 +53,7 @@ const PAGES = [
   PATHS.concessions,
   ...Object.keys(KIND_LABELS).map(kindHref),
   PATHS.grantors,
+  PATHS.municipalities,
   PATHS.companies,
   PATHS.map,
   PATHS.flags,
@@ -96,6 +100,11 @@ function urlsFor(section: Section): SitemapEntry[] {
           loc: `${BASE}${companyHref(c.name, c.eik!)}`,
           lastmod: dataDate,
         }));
+    case "municipalities":
+      return listMunicipalities().rows.map((m) => ({
+        loc: `${BASE}${municipalityHref(m.slug)}`,
+        lastmod: dataDate,
+      }));
     case "documents":
       // текстът на договорите/решенията - lastmod е този на партидата
       return documentPagesForSitemap().map((d) => ({

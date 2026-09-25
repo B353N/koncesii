@@ -19,12 +19,19 @@ import {
   flagCodeCounts,
   getSummary,
   kindCounts,
+  listMunicipalities,
   lowestPaymentRatio,
   mapPoints,
   topByTerm,
   topGrantors,
 } from "../queries.server";
-import { blogHref, flagHref, grantorHref, PATHS } from "../paths";
+import {
+  blogHref,
+  flagHref,
+  grantorHref,
+  municipalityHref,
+  PATHS,
+} from "../paths";
 
 export const handle: RouteHandle = { fullBleed: true };
 
@@ -66,6 +73,9 @@ export function loader({}: Route.LoaderArgs) {
     longest: topByTerm(5),
     lowest: lowestPaymentRatio(5),
     grantors: topGrantors(10),
+    municipalities: listMunicipalities()
+      .rows.sort((a, b) => b.concessions - a.concessions)
+      .slice(0, 18),
     posts: POSTS.slice(0, 3).map(postMeta),
   };
 }
@@ -83,6 +93,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     longest,
     lowest,
     grantors,
+    municipalities,
     posts,
   } = loaderData;
   if (!summary)
@@ -215,6 +226,38 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             </Link>
           </section>
         </div>
+
+        <section className="mt-16">
+          <h2 className="font-display text-2xl font-bold tracking-[-0.02em]">
+            Концесии по общини
+          </h2>
+          <p className="mt-1.5 mb-4 text-stone">
+            Общините с най-много концесии по регистрите
+          </p>
+          <ul className="grid gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
+            {municipalities.map((m) => (
+              <li key={m.slug}>
+                <Link to={municipalityHref(m.slug)} className={ROW}>
+                  <span>
+                    {m.name}{" "}
+                    <span className="font-normal text-stone">
+                      обл. {m.oblast}
+                    </span>
+                  </span>
+                  <span className="text-stone tabular-nums">
+                    {m.concessions}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <Link
+            to={PATHS.municipalities}
+            className="mt-3 inline-block font-semibold text-water"
+          >
+            Всички общини
+          </Link>
+        </section>
 
         <section className="mt-16">
           <h2 className="font-display text-2xl font-bold tracking-[-0.02em]">

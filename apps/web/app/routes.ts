@@ -24,6 +24,8 @@ export default [
   route("indikatori.csv", "routes/flags-csv.ts"),
   route("tarsene", "routes/search.tsx"),
   route("metodologiya", "routes/methodology.tsx"),
+  route("obshtini", "routes/municipalities.tsx"),
+  route("obshtini/:slug", "routes/municipality-detail.tsx"),
   // Английските адреси до 25.09.2026 (и по-старите slug-ове на партидите):
   // едно 301 директно към новия адрес, без вериги (routes/legacy-redirect.ts).
   ...[
@@ -62,6 +64,9 @@ export default [
   }),
   route("sitemap-companies.xml", "routes/sitemap-section.ts", {
     id: "sitemap-companies",
+  }),
+  route("sitemap-municipalities.xml", "routes/sitemap-section.ts", {
+    id: "sitemap-municipalities",
   }),
   route("sitemap-documents.xml", "routes/sitemap-section.ts", {
     id: "sitemap-documents",

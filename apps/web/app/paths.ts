@@ -23,6 +23,7 @@ export const PATHS = {
   blog: "/analizi",
   methodology: "/metodologiya",
   search: "/tarsene",
+  municipalities: "/obshtini",
 } as const;
 
 export { concessionHref };
@@ -63,4 +64,9 @@ export function flagHref(code?: string | null): string {
 
 export function blogHref(slug: string): string {
   return `${PATHS.blog}/${slug}`;
+}
+
+/** Концесиите в една община (/obshtini/sozopol). */
+export function municipalityHref(slug: string): string {
+  return `${PATHS.municipalities}/${slug}`;
 }

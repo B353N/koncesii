@@ -8,6 +8,7 @@ import {
 } from "./format";
 import type { ConcessionRow } from "./queries.server";
 import { concessionHref } from "./slug";
+import { companyHref, grantorHref } from "./paths";
 
 /** Речникът на интерфейса — docs/design.md. */
 
@@ -215,7 +216,7 @@ export function RelatedList({
               className="line-clamp-2 text-water underline decoration-1 underline-offset-2"
               title={r.title}
             >
-              {r.title}
+              {r.headline}
             </Link>
             <span className="block font-mono text-xs text-stone">
               {regNumLabel(r.reg_num)}
@@ -247,33 +248,33 @@ export function ConcessionsTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="my-2 w-full min-w-[760px] table-fixed border-collapse text-[13.5px]">
+      <table className="my-2 w-full min-w-[820px] table-fixed border-collapse text-[13.5px] [&_td]:[overflow-wrap:anywhere]">
         <thead>
           <tr className="border-b-[1.5px] border-ink text-left font-mono text-[11.5px] uppercase tracking-wider text-stone">
-            <th scope="col" className="w-[34%] py-2 pr-2 font-medium">
+            <th scope="col" className="w-[31%] py-2 pr-2 font-medium">
               Обект
             </th>
             {showGrantor && (
-              <th scope="col" className="w-[16%] py-2 pr-2 font-medium">
+              <th scope="col" className="w-[15%] py-2 pr-2 font-medium">
                 Концедент
               </th>
             )}
-            <th scope="col" className="w-[22%] py-2 pr-2 font-medium">
+            <th scope="col" className="w-[20%] py-2 pr-2 font-medium">
               Концесионер
             </th>
             <th
               scope="col"
-              className="w-[10%] py-2 pr-2 text-right font-medium"
+              className="w-[14%] py-2 pr-2 text-right font-medium"
             >
               Срок
             </th>
             <th
               scope="col"
-              className="w-[13%] py-2 pr-2 text-right font-medium"
+              className="w-[14%] py-2 pr-2 text-right font-medium"
             >
               Годишно
             </th>
-            <th scope="col" className="w-[5%] py-2 font-medium">
+            <th scope="col" className="w-[6%] py-2 font-medium">
               Инд.
             </th>
           </tr>
@@ -287,7 +288,7 @@ export function ConcessionsTable({
                   className="line-clamp-3 text-water underline decoration-1 underline-offset-2"
                   title={r.title}
                 >
-                  {r.title}
+                  {r.headline}
                 </Link>
                 <span className="block truncate font-mono text-xs text-stone">
                   {regNumLabel(r.reg_num)}
@@ -297,7 +298,7 @@ export function ConcessionsTable({
                 <td className="py-2 pr-2">
                   {r.grantor_slug ? (
                     <Link
-                      to={`/grantors/${encodeURIComponent(r.grantor_slug)}`}
+                      to={grantorHref(r.grantor_slug)}
                       className="text-ink hover:text-water"
                     >
                       {r.grantor_name}
@@ -310,7 +311,7 @@ export function ConcessionsTable({
               <td className="py-2 pr-2">
                 {r.eik ? (
                   <Link
-                    to={`/companies/${r.eik}`}
+                    to={companyHref(r.concessionaire_name ?? "", r.eik)}
                     className="line-clamp-2 text-ink hover:text-water"
                     title={r.concessionaire_name ?? undefined}
                   >
@@ -330,7 +331,7 @@ export function ConcessionsTable({
                   </span>
                 )}
               </td>
-              <td className="py-2 pr-2 text-right font-mono tabular-nums whitespace-nowrap">
+              <td className="py-2 pr-2 text-right font-mono tabular-nums">
                 {fmtMonths(r.term_months)}
               </td>
               <td

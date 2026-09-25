@@ -11,9 +11,10 @@ import { getDocumentText, resolveConcession } from "../queries.server";
 import { concessionHref } from "../slug";
 import { absUrl, clampDescription, pageTitle, shortenTitle } from "../seo";
 import { breadcrumbJsonLd, jsonLdScript } from "../jsonLd";
+import { documentHref, PATHS } from "../paths";
 
 /**
- * /concessions/:slug/documents/:key — текстът на прикачен документ,
+ * /koncesii/:slug/dokumenti/:key - текстът на прикачен документ,
  * по страници, с метода на всяка (текстов слой или OCR) и линк към
  * оригинала в регистъра. Оригиналът е меродавен; текстът е за търсене и
  * четене (docs/document-extraction.md).
@@ -23,10 +24,7 @@ export function loader({ params }: Route.LoaderArgs) {
   const hit = resolveConcession(params.slug);
   if (!hit) throw new Response("Not Found", { status: 404 });
   if (hit.slug !== params.slug) {
-    throw redirect(
-      `${concessionHref(hit.slug)}/documents/${encodeURIComponent(params.key)}`,
-      301,
-    );
+    throw redirect(documentHref(hit.slug, params.key), 301);
   }
   const doc = getDocumentText(hit.reg_num, params.key);
   if (!doc || doc.pages.length === 0) {
@@ -52,9 +50,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
     `Пълният текст на документа по концесия ${regNumLabel(doc.concession.reg_num)} (${doc.concession.title}), по страници, с линк към оригинала в НКР. ${firstText}`,
     300,
   );
-  const url = absUrl(
-    `${concessionHref(doc.concession.slug)}/documents/${doc.document.key}`,
-  );
+  const url = absUrl(`${documentHref(doc.concession.slug, doc.document.key)}`);
   return [
     { title: pageTitle(title) },
     { name: "description", content: description },
@@ -71,7 +67,7 @@ export default function DocumentText({ loaderData }: Route.ComponentProps) {
   const concessionUrl = concessionHref(doc.concession.slug);
   const crumbs: Crumb[] = [
     { label: "Начало", to: "/" },
-    { label: "Концесии", to: "/concessions" },
+    { label: "Концесии", to: PATHS.concessions },
     { label: regNumLabel(doc.concession.reg_num), to: concessionUrl },
     { label: docTitle(doc.document.title) },
   ];
@@ -89,7 +85,7 @@ export default function DocumentText({ loaderData }: Route.ComponentProps) {
         <div className="mb-1 font-mono text-xs uppercase tracking-wider text-stone">
           Документ по партида {doc.concession.reg_num}
         </div>
-        <h1 className="font-display text-2xl leading-tight font-bold text-balance">
+        <h1 className="font-sans text-2xl leading-tight font-bold text-balance">
           {docTitle(doc.document.title)}
         </h1>
         <p className="mt-1.5 text-sm text-ink/85">

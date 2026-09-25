@@ -1,4 +1,6 @@
+import { redirect } from "react-router";
 import type { Route } from "./+types/company-detail";
+import { eikOfSlug } from "../slug";
 import {
   Breadcrumbs,
   ConcessionsTable,
@@ -16,6 +18,7 @@ import {
   sentence,
 } from "../seo";
 import { concessionHref } from "../slug";
+import { companyHref, PATHS } from "../paths";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   if (!loaderData) return [{ title: pageTitle("Компания") }];
@@ -50,7 +53,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
     `${company.eik ? `(ЕИК ${company.eik}) ` : ""}— концесии по регистрите`,
     90,
   );
-  const url = absUrl(`/companies/${encodeURIComponent(company.eik ?? "")}`);
+  const url = absUrl(companyHref(company.name, company.eik ?? ""));
   return [
     { title: pageTitle(title) },
     { name: "description", content: description },
@@ -62,8 +65,12 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export function loader({ params }: Route.LoaderArgs) {
-  const result = getCompany(params.eik);
+  // ЕИК-ът е ключът; името в адреса е за хората и търсачките
+  const eik = eikOfSlug(params.slug);
+  const result = eik ? getCompany(eik) : null;
   if (!result) throw new Response("Not Found", { status: 404 });
+  const href = companyHref(result.company.name, eik!);
+  if (href !== `${PATHS.companies}/${params.slug}`) throw redirect(href, 301);
   return result;
 }
 
@@ -71,7 +78,7 @@ export default function CompanyDetail({ loaderData }: Route.ComponentProps) {
   const { company, concessions } = loaderData;
   const crumbs: Crumb[] = [
     { label: "Начало", to: "/" },
-    { label: "Компании", to: "/companies" },
+    { label: "Компании", to: PATHS.companies },
     { label: company.name },
   ];
   return (
@@ -92,7 +99,7 @@ export default function CompanyDetail({ loaderData }: Route.ComponentProps) {
                     propertyID: "ЕИК",
                     value: company.eik,
                   },
-                  url: absUrl(`/companies/${company.eik}`),
+                  url: absUrl(companyHref(company.name, company.eik ?? "")),
                 }
               : {}),
             ...(company.address ? { address: company.address } : {}),

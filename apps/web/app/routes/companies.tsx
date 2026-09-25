@@ -4,6 +4,7 @@ import { DataPending, ExportLinks, PageTitle } from "../components";
 import { fmtEur } from "../format";
 import { getSummary, listCompanies } from "../queries.server";
 import { absUrl, ogDescriptors, pageTitle } from "../seo";
+import { companyHref, PATHS } from "../paths";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -17,12 +18,12 @@ export function meta({}: Route.MetaArgs) {
       title: "Компании концесионери в България",
       description:
         "Концесионерите в България по ЕИК: кой какво държи, откога и срещу какво възнаграждение.",
-      url: absUrl("/companies"),
+      url: absUrl(PATHS.companies),
     }),
     {
       tagName: "link",
       rel: "canonical",
-      href: "https://koncesii.com/companies",
+      href: absUrl(PATHS.companies),
     },
   ];
 }
@@ -41,7 +42,7 @@ export default function Companies({ loaderData }: Route.ComponentProps) {
         title="Компании"
         count={`${rows.length} концесионери, подредени по брой концесии`}
       />
-      <ExportLinks csvHref="/companies.csv" />
+      <ExportLinks csvHref={PATHS.companiesCsv} />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
           <thead>
@@ -66,7 +67,7 @@ export default function Companies({ loaderData }: Route.ComponentProps) {
                 <td className="py-2 pr-2">
                   {r.eik ? (
                     <Link
-                      to={`/companies/${r.eik}`}
+                      to={companyHref(r.name, r.eik)}
                       className="text-water underline decoration-1 underline-offset-2"
                     >
                       {r.name}

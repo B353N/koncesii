@@ -1,33 +1,43 @@
-/* Шрифтовете са self-hosted (без външни CDN-и, строг CSP) — docs/design.md. */
-@import "@fontsource/literata/cyrillic-400.css";
-@import "@fontsource/literata/cyrillic-700.css";
-@import "@fontsource/literata/400.css";
-@import "@fontsource/literata/700.css";
-@import "@fontsource/ibm-plex-sans/cyrillic-400.css";
-@import "@fontsource/ibm-plex-sans/cyrillic-600.css";
-@import "@fontsource/ibm-plex-sans/400.css";
-@import "@fontsource/ibm-plex-sans/600.css";
+/* Шрифтовете са self-hosted (без външни CDN-и, строг CSP) — docs/design.md.
+   Само латиница + кирилица; unicode-range тегли подмножеството, което трябва. */
+@import "@fontsource/unbounded/latin-500.css";
+@import "@fontsource/unbounded/cyrillic-500.css";
+@import "@fontsource/unbounded/latin-700.css";
+@import "@fontsource/unbounded/cyrillic-700.css";
+@import "@fontsource/manrope/latin-400.css";
+@import "@fontsource/manrope/cyrillic-400.css";
+@import "@fontsource/manrope/latin-600.css";
+@import "@fontsource/manrope/cyrillic-600.css";
+@import "@fontsource/manrope/latin-700.css";
+@import "@fontsource/manrope/cyrillic-700.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
 @import "@fontsource/ibm-plex-mono/cyrillic-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
 @import "@fontsource/ibm-plex-mono/cyrillic-500.css";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
 
 @import "tailwindcss";
 
-/* Токените на визуалния език — docs/design.md е източникът на истина. */
+/* Токените на визуалния език — docs/design.md е източникът на истина.
+   Имената са от v1, стойностите са от v2 („картата като приложение"),
+   за да наследят новата тема и страниците, които още не са преработени. */
 @theme {
-  --color-ink: #1b2a2c;
-  --color-water: #14464c;
-  --color-water-br: #0f6a6b;
-  --color-paper: #fbfbf8;
+  --color-ink: #15212b;
+  --color-water: #0b6e69;
+  --color-water-br: #0a5c58;
+  --color-paper: #eef2f1;
   --color-raised: #ffffff;
-  --color-limestone: #e3e4dc;
-  --color-stone: #5e6e6c;
-  --color-oxide: #a63a21;
-  --color-ochre: #8f6400;
+  --color-limestone: #e2e8ea;
+  --color-stone: #5d6b76;
+  /* индикаторите: текстовите стойности държат AA контраст върху бяло,
+     маркерите на картата ползват по-наситените --color-sev-* */
+  --color-oxide: #b8381f;
+  --color-ochre: #8a5a00;
+  --color-sev-high: #d9442a;
+  --color-sev-med: #e39a14;
+  --color-sev-low: #8795a1;
 
-  --font-display: "Literata", Georgia, "Times New Roman", serif;
-  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-display: "Unbounded", "Manrope", system-ui, sans-serif;
+  --font-sans: "Manrope", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 
@@ -46,21 +56,21 @@ html {
   background: repeating-linear-gradient(
     45deg,
     transparent 0 5px,
-    rgba(166, 58, 33, 0.28) 5px 6px
+    rgba(217, 68, 42, 0.32) 5px 6px
   );
 }
 .hatch-med {
   background: repeating-linear-gradient(
     45deg,
     transparent 0 5px,
-    rgba(143, 100, 0, 0.3) 5px 6px
+    rgba(227, 154, 20, 0.4) 5px 6px
   );
 }
 .hatch-low {
   background: repeating-linear-gradient(
     45deg,
     transparent 0 5px,
-    rgba(94, 110, 108, 0.28) 5px 6px
+    rgba(135, 149, 161, 0.35) 5px 6px
   );
 }
 

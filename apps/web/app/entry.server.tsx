@@ -10,6 +10,7 @@ import {
   wantsMarkdown,
 } from "./markdown.server";
 import { NonceContext } from "./nonce";
+import { normalizePath } from "./seo";
 
 const STREAM_TIMEOUT = 10_000;
 
@@ -25,10 +26,10 @@ function csp(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' https://*.googletagmanager.com`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.google-analytics.com https://*.googletagmanager.com",
+    "img-src 'self' data: blob: https://tiles.openfreemap.org https://*.google-analytics.com https://*.googletagmanager.com",
     "font-src 'self' data:",
-    // MapLibre тегли тайловете през fetch → connect-src, не img-src
-    "connect-src 'self' https://tile.openstreetmap.org https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com",
+    // MapLibre тегли стила, тайловете, шрифтовете и спрайтовете през fetch → connect-src
+    "connect-src 'self' https://tiles.openfreemap.org https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
@@ -80,6 +81,17 @@ export default function handleRequest(
     }
   }
 
+  // Един адрес на страница (seo.ts): /koncesii/ и /KONCESII → /koncesii.
+  // Стига само до страниците, които ще върнат 200 - старите адреси вече
+  // са пренасочени от своите loader-и.
+  const clean = normalizePath(url.pathname);
+  if (clean !== url.pathname) {
+    return new Response(null, {
+      status: 301,
+      headers: { Location: `${clean}${url.search}` },
+    });
+  }
+
   // Markdown for Agents: Accept: text/markdown → markdown изглед на същия
   // URL. HTML остава по подразбиране; и двата варианта носят Vary: Accept.
   if (wantsMarkdown(request)) {
@@ -92,7 +104,7 @@ export default function handleRequest(
     "Link",
     '</.well-known/api-catalog>; rel="api-catalog", ' +
       '</openapi.json>; rel="service-desc", ' +
-      '</methodology>; rel="service-doc"',
+      '</metodologiya>; rel="service-doc"',
   );
 
   logIfError(request, responseStatusCode);

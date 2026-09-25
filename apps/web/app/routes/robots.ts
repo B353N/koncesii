@@ -9,9 +9,9 @@ export function loader() {
     [
       "User-agent: *",
       "Allow: /",
-      "Disallow: /concessions/*/json",
+      "Disallow: /koncesii/*/json",
       "Disallow: /*.data$",
-      "Disallow: /search",
+      "Disallow: /tarsene",
       "",
       "Sitemap: https://koncesii.com/sitemap.xml",
       "",

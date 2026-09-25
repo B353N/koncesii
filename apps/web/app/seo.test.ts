@@ -3,6 +3,7 @@ import {
   clampDescription,
   concessionHeadline,
   concessionPageTitle,
+  normalizePath,
   isGenericTitle,
   pagedLinkDescriptors,
   pagedMeta,
@@ -155,4 +156,13 @@ test("описанието се подрязва по дума, не по зна
   const d = clampDescription("а".repeat(50) + " " + "б".repeat(400), 100);
   expect(d.length).toBeLessThanOrEqual(101);
   expect(d.endsWith("…")).toBe(true);
+});
+
+test("адресът се нормализира до малки букви и без / накрая", () => {
+  expect(normalizePath("/koncesii/")).toBe("/koncesii");
+  expect(normalizePath("/KONCESII/Vid/Yazoviri")).toBe(
+    "/koncesii/vid/yazoviri",
+  );
+  expect(normalizePath("/")).toBe("/");
+  expect(normalizePath("/koncesii")).toBe("/koncesii");
 });

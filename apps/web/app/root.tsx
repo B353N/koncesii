@@ -14,6 +14,19 @@ import type { Route } from "./+types/root";
 import { jsonLdScript, websiteJsonLd } from "./jsonLd";
 import { useNonce } from "./nonce";
 import "./app.css";
+// Шрифтовете на първия екран (текст и заглавие, кирилица) - preload, за да
+// не чака браузърът CSS-а, за да ги открие. Същият файл като в @font-face.
+import manropeCyr400 from "@fontsource/manrope/files/manrope-cyrillic-400-normal.woff2?url";
+import unboundedCyr700 from "@fontsource/unbounded/files/unbounded-cyrillic-700-normal.woff2?url";
+
+export const links: Route.LinksFunction = () =>
+  [manropeCyr400, unboundedCyr700].map((href) => ({
+    rel: "preload",
+    href,
+    as: "font",
+    type: "font/woff2",
+    crossOrigin: "anonymous" as const,
+  }));
 import { PATHS } from "./paths";
 
 /** Google Analytics 4 — само в production, за да не шуми dev трафикът. */

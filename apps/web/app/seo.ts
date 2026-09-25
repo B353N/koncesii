@@ -13,6 +13,16 @@ export function pageTitle(text: string): string {
   return `${text} | ${SITE_NAME}`;
 }
 
+/**
+ * Един адрес на страница: без наклонена черта накрая и с малки латински
+ * букви (/Koncesii/ → /koncesii). Кирилицата не се пипа - тя е само в
+ * старите адреси, които имат собствени 301 (routes/legacy-redirect.ts).
+ */
+export function normalizePath(pathname: string): string {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  return p.replace(/[A-Z]+/g, (m) => m.toLowerCase());
+}
+
 /** Абсолютен адрес на страница по път (без домейн). */
 export function absUrl(path: string): string {
   return `${SITE}${path}`;

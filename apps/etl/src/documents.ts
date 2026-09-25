@@ -207,7 +207,7 @@ export function ingestDocuments(
       if (method === "ocr") stats.ocrPages++;
     });
 
-    const rank = documentRank(doc.title ?? rec?.filename);
+    const rank = documentRank(doc.title, rec?.filename);
     const list = candidates.get(doc.concession_id) ?? [];
     for (const f of extractDocFacts(pages)) {
       list.push({

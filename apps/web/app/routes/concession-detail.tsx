@@ -606,7 +606,10 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
           />
         </div>
         <p className="max-w-[70ch] pb-2 text-[13px] text-stone">
-          Как е изчислено: сумите в лева се превалутират по фиксирания курс{" "}
+          Как е изчислено: сумите във формулярите на НКР са в евро, макар да са
+          отбелязани „лв.“ — регистърът ги е превалутирал при въвеждането на
+          еврото, без да смени етикета. Сумите в лева от договорите и общинските
+          регистри се превалутират по фиксирания курс{" "}
           {BGN_EUR_RATE.toLocaleString("bg-BG", {
             minimumFractionDigits: 5,
           })}{" "}

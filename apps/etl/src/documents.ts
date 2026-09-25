@@ -73,6 +73,30 @@ function sameNumber(field: DocFactField, a: number, b: number): boolean {
   return Math.abs(a - b) <= Math.max(0.02, Math.abs(b) * 0.0005);
 }
 
+const VAT = 1.2;
+
+/**
+ * Сумата от документа съвпада с регистъра, ако съвпада както е или след
+ * премахване/добавяне на ДДС: договорите често дават сумата „с ДДС", а
+ * формулярът — „без ДДС" (и обратното, въпреки етикета).
+ */
+function agreesWithRegistry(
+  c: DocFact,
+  value: number,
+  registry: number,
+): boolean {
+  if (c.field === "term" || c.field === "grace_period") {
+    return sameNumber(c.field, value, registry);
+  }
+  const variants =
+    c.vat === "with"
+      ? [value, value / VAT]
+      : c.vat === "without"
+        ? [value, value * VAT]
+        : [value, value / VAT, value * VAT];
+  return variants.some((v) => sameNumber(c.field, v, registry));
+}
+
 function numberOf(f: DocFact): number | null {
   return f.field === "term" || f.field === "grace_period" ? f.months : f.eur;
 }
@@ -331,7 +355,7 @@ function applyOne(
   }
 
   const currentNum = current["num"] as number | null;
-  if (currentNum != null && sameNumber(c.field, value, currentNum)) {
+  if (currentNum != null && agreesWithRegistry(c, value, currentNum)) {
     return "agrees";
   }
 

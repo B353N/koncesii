@@ -67,6 +67,9 @@ export function parseMoney(rawInput: unknown): ParsedMoney {
   const m = MONEY_RE.exec(scope);
   if (!m || !m[1]) return none;
 
+  // „относителна тежест 80%", „4% от реализираните приходи" — процент, не сума
+  if (!m[2] && /^\s*%/.test(scope.slice(m.index + m[0].length))) return none;
+
   const value = parseDecimal(m[1]);
   if (value == null) return none;
 

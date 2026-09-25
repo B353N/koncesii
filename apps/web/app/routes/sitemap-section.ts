@@ -119,6 +119,11 @@ function urlsFor(section: Section): SitemapEntry[] {
  * Една и съща route файл е закачен на пет пътя (виж routes.ts);
  * секцията се чете от pathname.
  */
+/** Броят адреси в секция - индексът пропуска празните. */
+export function sectionSize(section: Section): number {
+  return urlsFor(section).length;
+}
+
 export function loader({ request }: { request: Request }) {
   const m = /\/sitemap-([a-z]+)\.xml$/.exec(new URL(request.url).pathname);
   const section = SECTIONS.find((s) => s === m?.[1]);

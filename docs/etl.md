@@ -105,9 +105,9 @@ Ingest-ът е **детерминистичен**: същият снапшот �
 | `pnpm ingest` (автоматично)  | `documents`, `document_pages` + FTS5, `extracted_facts`, `document_amounts`; попълва липсващи полета  |
 
 `pnpm extract` иска poppler (`pdftotext`, `pdftoppm`), за сканираните страници — `tesseract`
-с български език, за Word/RTF — LibreOffice (`soffice`), за RAR/7z архивите — `7z`
-(`brew install sevenzip`; единствено той и `unar` четат „solid“ RAR) или `bsdtar` (на macOS
-системният `tar`). XML и HTML файловете се четат без инструменти. Всеки файл има лимит
+с български език, за Word/RTF - LibreOffice (`soffice`), за архивите - `unar` (`brew install unar`; чете стари и „solid“ RAR и сам декодира кирилските
+имена в CP866), `7z` или `bsdtar` (на macOS системният `tar`), за повредени PDF - Ghostscript.
+XML и HTML файловете се четат без инструменти. Всеки файл има лимит
 (`--file-timeout`, по подразбиране 30 мин.); дълъг файл се вижда в лога всяка минута със
 страницата, до която е стигнал, а надвишилият лимита не се опитва пак без `--retry-timeouts`. Паралелно е (`--jobs N`) и
 възобновимо: вече извлечен файл със същия sha256 и версия на правилата се прескача, а

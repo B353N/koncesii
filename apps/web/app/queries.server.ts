@@ -1,8 +1,27 @@
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getDb } from "./db.server";
-import { FACT_ORDER } from "./format";
-import { buildSlugIndex, type SlugIndex } from "./slug";
+import {
+  CONCESSION_KIND_LABELS,
+  FACT_ORDER,
+  KIND_LABELS,
+  SEVERITY_RANK,
+  shortObjectTitle,
+} from "./format";
+import { buildUrlIndex, type UrlIndex } from "./slug";
+import {
+  concessionHeadline,
+  concessionPageTitle,
+  concessionUrlText,
+} from "./seo";
+import { grantorSlug } from "./paths";
+import {
+  municipalityLabel,
+  municipalitySlug,
+  resolveMunicipality,
+  settlementsIn,
+  type MunicipalitySource,
+} from "./municipality";
 
 /**
  * Всички заявки на сайта. Строго read-only, само bound параметри —
@@ -19,8 +38,10 @@ export interface Summary {
 
 export interface ConcessionRow {
   reg_num: string;
-  /** URL slug на партидата (виж slug.ts); адресът е /concessions/<slug>. */
+  /** URL slug на партидата (виж slug.ts); адресът е /koncesii/<slug>. */
   slug: string;
+  /** Краткото заглавие (h1 на партидата) - текстът на връзките. */
+  headline: string;
   title: string;
   status: string | null;
   grantor_name: string | null;
@@ -60,31 +81,108 @@ const LIST_SQL = `SELECT ${LIST_COLS} ${LIST_FROM}`;
 type ListRow = Omit<ConcessionRow, "slug">;
 
 /**
- * Индексът номер ↔ slug се строи веднъж за отворената база (WeakMap по
- * handle: при атомарна подмяна на файла getDb() връща нов handle и
- * индексът се престроява).
+ * Индексът номер ↔ адрес и заглавията на партидите се строят веднъж за
+ * отворената база (WeakMap по handle: при атомарна подмяна на файла
+ * getDb() връща нов handle и индексът се престроява). Адресът е
+ * описание + номер (slug.ts); заглавието е обектът и общината (seo.ts).
  */
-const slugIndexes = new WeakMap<Database.Database, SlugIndex>();
-function slugIndex(db: Database.Database): SlugIndex {
-  let idx = slugIndexes.get(db);
-  if (!idx) {
-    idx = buildSlugIndex(
-      db
-        .prepare<[], { reg_num: string }>("SELECT reg_num FROM concessions")
-        .all()
-        .map((r) => r.reg_num),
-    );
-    slugIndexes.set(db, idx);
-  }
-  return idx;
+interface ConcessionIndex {
+  urls: UrlIndex;
+  headline: Map<string, string>;
+  /** заглавия, които се падат на повече от една партида */
+  duplicate: Set<string>;
+}
+const concessionIndexes = new WeakMap<Database.Database, ConcessionIndex>();
+function concessionIndex(db: Database.Database): ConcessionIndex {
+  let ci = concessionIndexes.get(db);
+  if (ci) return ci;
+  const rows = db
+    .prepare<
+      [],
+      {
+        reg_num: string;
+        title: string | null;
+        ckind: string | null;
+        grantor: string | null;
+        kind: string | null;
+        description: string | null;
+        municipality: string | null;
+      }
+    >(
+      `SELECT c.reg_num, c.title, c.kind AS ckind, g.name AS grantor,
+              (SELECT o.kind FROM objects o WHERE o.concession_id = c.id
+                ORDER BY o.seq LIMIT 1) AS kind,
+              (SELECT o.description FROM objects o WHERE o.concession_id = c.id
+                ORDER BY o.seq LIMIT 1) AS description,
+              (SELECT o.municipality FROM objects o WHERE o.concession_id = c.id
+                AND o.municipality IS NOT NULL ORDER BY o.seq LIMIT 1) AS municipality
+         FROM concessions c LEFT JOIN grantors g ON g.id = c.grantor_id`,
+    )
+    .all();
+  const headline = new Map<string, string>();
+  const seen = new Set<string>();
+  const duplicate = new Set<string>();
+  const texts = rows.map((r) => {
+    const parts = {
+      title: r.title,
+      kindLabel: r.kind ? (KIND_LABELS[r.kind] ?? null) : null,
+      concessionKindLabel: r.ckind
+        ? (CONCESSION_KIND_LABELS[r.ckind] ?? null)
+        : null,
+      objectDescription: r.description,
+      grantorName: r.grantor,
+      municipality: r.municipality,
+    };
+    const h = concessionHeadline(parts);
+    headline.set(r.reg_num, h);
+    if (seen.has(h)) duplicate.add(h);
+    seen.add(h);
+    return { reg_num: r.reg_num, text: concessionUrlText(parts) };
+  });
+  ci = { urls: buildUrlIndex(texts), headline, duplicate };
+  concessionIndexes.set(db, ci);
+  return ci;
+}
+function slugIndex(db: Database.Database): UrlIndex {
+  return concessionIndex(db).urls;
 }
 
+/** H1 и <title> на партида (seo.ts), с номера само при дубликат. */
+export function concessionTitles(
+  regNum: string,
+): { headline: string; pageTitle: string } | null {
+  const db = getDb();
+  if (!db) return null;
+  const ci = concessionIndex(db);
+  const headline = ci.headline.get(regNum);
+  if (!headline) return null;
+  return {
+    headline,
+    pageTitle: concessionPageTitle(
+      headline,
+      regNum,
+      ci.duplicate.has(headline),
+    ),
+  };
+}
+
+/**
+ * Адресът и краткото заглавие на всеки ред: връзките в списъците носят
+ * същия текст като h1 на партидата (сигнал за търсачките и четим за
+ * хората); регистровото заглавие остава в `title`.
+ */
 function withSlugs<T extends { reg_num: string }>(
   db: Database.Database,
   rows: T[],
-): Array<T & { slug: string }> {
-  const idx = slugIndex(db);
-  return rows.map((r) => ({ ...r, slug: idx.slugOf(r.reg_num) }));
+): Array<T & { slug: string; headline: string }> {
+  const ci = concessionIndex(db);
+  return rows.map((r) => ({
+    ...r,
+    slug: ci.urls.slugOf(r.reg_num),
+    headline:
+      ci.headline.get(r.reg_num) ??
+      ("title" in r && typeof r.title === "string" ? r.title : r.reg_num),
+  }));
 }
 
 /** Slug за суров партиден номер. */
@@ -100,9 +198,11 @@ export function allConcessionSlugs(): string[] {
 }
 
 /**
- * Разпознава сегмента от /concessions/<x>: каноничен slug, суров партиден
- * номер (стар адрес → 301) или номер, отрязан на "#" от търсачка, ако е
- * еднозначен. Връща null, ако няма такава партида.
+ * Разпознава сегмента от /koncesii/<x> (и от старите /concessions/<x>):
+ * каноничен адрес, остаряла описателна част, стар slug само от номера,
+ * суров партиден номер или номер, отрязан на "#" от търсачка, ако е
+ * еднозначен. `slug` е каноничният адрес - ако се различава от сегмента,
+ * страницата прави 301. Връща null, ако няма такава партида.
  */
 export function resolveConcession(
   param: string,
@@ -110,8 +210,8 @@ export function resolveConcession(
   const db = getDb();
   if (!db) return null;
   const idx = slugIndex(db);
-  const bySlug = idx.regNumOf(param);
-  if (bySlug) return { reg_num: bySlug, slug: param };
+  const hit = idx.resolve(param);
+  if (hit) return { reg_num: hit.regNum, slug: idx.slugOf(hit.regNum) };
   const exists = db
     .prepare<[string], { reg_num: string }>(
       "SELECT reg_num FROM concessions WHERE reg_num = ?",
@@ -303,6 +403,13 @@ export interface ObjectRow {
   description: string;
   kind: string;
   kind_raw: string | null;
+  oblast: string | null;
+  municipality: string | null;
+  place: string | null;
+  lat: number | null;
+  lon: number | null;
+  /** 'settlement' | 'municipality' - точката е центроид, приблизителна */
+  geo_precision: string | null;
 }
 
 export interface PaymentRow {
@@ -330,7 +437,7 @@ export interface ReportedPaymentRow {
 
 export interface ConcessionDetail {
   concession: ConcessionFull;
-  /** URL slug на партидата; адресът е /concessions/<slug>. */
+  /** URL slug на партидата; адресът е /koncesii/<slug>. */
   slug: string;
   grantor: { id: string; name: string } | null;
   concessionaire: { id: string; name: string; eik: string | null } | null;
@@ -377,7 +484,9 @@ export function getConcession(regNum: string): ConcessionDetail | null {
     concessionaire,
     objects: db
       .prepare<[string], ObjectRow>(
-        "SELECT id, description, kind, kind_raw FROM objects WHERE concession_id = ? ORDER BY seq",
+        `SELECT id, description, kind, kind_raw, oblast, municipality, place,
+                lat, lon, geo_precision
+           FROM objects WHERE concession_id = ? ORDER BY seq`,
       )
       .all(id),
     documents: documentRows(db, id),
@@ -418,17 +527,49 @@ export function listGrantors(): GrantorRow[] {
     .all();
 }
 
-export function getGrantor(slug: string) {
+const grantorByLatin = new WeakMap<Database.Database, Map<string, string>>();
+/**
+ * Концедентът зад сегмента от адреса: латинският slug или старият на
+ * кирилица. `slug` е каноничният латински - при разлика страницата прави 301.
+ */
+export function getGrantor(param: string) {
   const db = getDb();
   if (!db) return null;
+  let byLatin = grantorByLatin.get(db);
+  if (!byLatin) {
+    byLatin = new Map(
+      db
+        .prepare<[], { id: string }>("SELECT id FROM grantors")
+        .all()
+        .map((g) => [grantorSlug(g.id.slice(3)), g.id] as const),
+    );
+    grantorByLatin.set(db, byLatin);
+  }
+  const id = byLatin.get(param) ?? `gr:${param}`;
   const grantor = db
     .prepare<[string], { id: string; name: string; kind: string }>(
       "SELECT id, name, kind FROM grantors WHERE id = ?",
     )
-    .get(`gr:${slug}`);
+    .get(id);
   if (!grantor) return null;
-  const { rows } = listConcessions({ grantor: slug, limit: 500 });
-  return { grantor, concessions: rows };
+  const { rows } = listConcessions({
+    grantor: grantor.id.slice(3),
+    limit: 500,
+  });
+  return { grantor, slug: grantorSlug(grantor.id.slice(3)), concessions: rows };
+}
+
+/** Името на компания по ЕИК - за адреса ѝ (paths.companyHref). */
+export function getCompanyName(eik: string): string | null {
+  const db = getDb();
+  if (!db) return null;
+  return (
+    db
+      .prepare<[string], { name: string }>(
+        "SELECT name FROM concessionaires WHERE eik = ?",
+      )
+      .get(eik)?.name ?? null
+  );
 }
 
 export interface CompanyRow {
@@ -755,7 +896,7 @@ export function lowestPaymentRatio(
 // ── Документите по партидата: текст, клаузи, търсене (E4) ────────────────
 
 export interface DocumentRow {
-  /** Стабилен ключ за адреса /concessions/<slug>/documents/<key>. */
+  /** Стабилен ключ за адреса /koncesii/<slug>/dokumenti/<key>. */
   key: string;
   title: string | null;
   kind: string | null;
@@ -1083,4 +1224,264 @@ export function documentPagesForSitemap(): Array<{
       key: documentKey(r.url),
       lastmod: r.changed_at,
     }));
+}
+
+/** Една точка на картата: партида с поне един гео-кодиран обект. */
+export interface MapPoint {
+  lat: number;
+  lon: number;
+  kind: string;
+  reg_num: string;
+  slug: string;
+  /** кратък етикет (shortObjectTitle); пълното заглавие е на партидата */
+  label: string;
+  municipality: string | null;
+  company: string | null;
+  company_eik: string | null;
+  term_months: number | null;
+  annual_payment_eur: number | null;
+  flags: string[];
+  /** най-високата тежест: 0 без индикатор, 1 ниска, 2 средна, 3 висока */
+  sev: number;
+}
+
+/**
+ * Точките за картата: първият гео-кодиран обект на всяка партида, с
+ * индикаторите ѝ. Подредени по тежест, за да е подреден и списъкът до картата.
+ */
+const mapPointsCache = new WeakMap<Database.Database, MapPoint[]>();
+export function mapPoints(): MapPoint[] {
+  const db = getDb();
+  if (!db) return [];
+  const cached = mapPointsCache.get(db);
+  if (cached) return cached;
+  const rows = db
+    .prepare<
+      [],
+      Omit<MapPoint, "slug" | "label" | "flags" | "sev"> & {
+        title: string;
+        flag_codes: string | null;
+        severities: string | null;
+      }
+    >(
+      `SELECT o.lat, o.lon, o.kind, c.reg_num, c.title, o.municipality,
+              ce.name AS company, ce.eik AS company_eik, c.term_months,
+              c.annual_payment_eur,
+              (SELECT group_concat(f.code) FROM flags f WHERE f.concession_id = c.id) AS flag_codes,
+              (SELECT group_concat(f.severity) FROM flags f WHERE f.concession_id = c.id) AS severities
+         FROM objects o
+         JOIN concessions c ON c.id = o.concession_id
+         LEFT JOIN concessionaires ce ON ce.id = c.concessionaire_id
+        WHERE o.lat IS NOT NULL
+          AND o.seq = (SELECT MIN(o2.seq) FROM objects o2
+                        WHERE o2.concession_id = c.id AND o2.lat IS NOT NULL)`,
+    )
+    .all();
+  const points = withSlugs(db, rows).map(
+    ({ title, flag_codes, severities, ...r }) => ({
+      ...r,
+      label: shortObjectTitle(title),
+      flags: flag_codes ? flag_codes.split(",") : [],
+      sev: Math.max(
+        0,
+        ...(severities ?? "").split(",").map((v) => SEVERITY_RANK[v] ?? 0),
+      ),
+    }),
+  );
+  points.sort(
+    (a, b) =>
+      b.sev - a.sev ||
+      b.flags.length - a.flags.length ||
+      a.label.localeCompare(b.label, "bg"),
+  );
+  // базата е само за четене до следващия deploy - смятаме веднъж
+  mapPointsCache.set(db, points);
+  return points;
+}
+
+/** Брой партиди по код на индикатор, с тежестта му. */
+export function flagCodeCounts(): Array<{
+  code: string;
+  severity: string;
+  n: number;
+}> {
+  const db = getDb();
+  if (!db) return [];
+  return db
+    .prepare<[], { code: string; severity: string; n: number }>(
+      `SELECT code, MAX(severity) AS severity, COUNT(DISTINCT concession_id) AS n
+         FROM flags GROUP BY code`,
+    )
+    .all()
+    .sort(
+      (a, b) =>
+        (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0) ||
+        b.n - a.n,
+    );
+}
+
+/** Общината на всяка партида (municipality.ts) и общините със страница. */
+export interface MunicipalityRow {
+  slug: string;
+  name: string;
+  oblast: string;
+  concessions: number;
+  flagged: number;
+}
+interface MunicipalityEntry extends MunicipalityRow {
+  regs: string[];
+  settlements: string[];
+  sources: Record<MunicipalitySource, number>;
+}
+interface MunicipalityIndex {
+  bySlug: Map<string, MunicipalityEntry>;
+  byReg: Map<string, MunicipalityEntry>;
+  total: number;
+}
+const municipalityIndexes = new WeakMap<Database.Database, MunicipalityIndex>();
+function municipalityIndex(db: Database.Database): MunicipalityIndex {
+  const cached = municipalityIndexes.get(db);
+  if (cached) return cached;
+  const rows = db
+    .prepare<
+      [],
+      {
+        reg_num: string;
+        title: string | null;
+        grantor: string | null;
+        municipality: string | null;
+        oblast: string | null;
+        texts: string | null;
+        flagged: number;
+      }
+    >(
+      `SELECT c.reg_num, c.title, g.name AS grantor,
+              (SELECT o.municipality FROM objects o WHERE o.concession_id = c.id
+                AND o.municipality IS NOT NULL ORDER BY o.seq LIMIT 1) AS municipality,
+              (SELECT o.oblast FROM objects o WHERE o.concession_id = c.id
+                AND o.oblast IS NOT NULL ORDER BY o.seq LIMIT 1) AS oblast,
+              (SELECT group_concat(coalesce(o.place, '') || ' ' || o.description, char(10))
+                 FROM objects o WHERE o.concession_id = c.id) AS texts,
+              EXISTS (SELECT 1 FROM flags f WHERE f.concession_id = c.id) AS flagged
+         FROM concessions c LEFT JOIN grantors g ON g.id = c.grantor_id`,
+    )
+    .all();
+  const byKey = new Map<
+    string,
+    MunicipalityEntry & { names: Map<string, number> }
+  >();
+  const byReg = new Map<string, MunicipalityEntry>();
+  for (const r of rows) {
+    const texts = [r.title ?? "", ...(r.texts ? r.texts.split("\n") : [])];
+    const m = resolveMunicipality({
+      objectMunicipality: r.municipality,
+      objectOblast: r.oblast,
+      grantorName: r.grantor,
+      texts,
+    });
+    if (!m) continue;
+    let e = byKey.get(m.key);
+    if (!e) {
+      const nameKey = m.key.split("|")[0]!;
+      e = {
+        slug: municipalitySlug(nameKey, m.oblast),
+        name: "",
+        oblast: m.oblast,
+        concessions: 0,
+        flagged: 0,
+        regs: [],
+        settlements: [],
+        sources: { object: 0, grantor: 0, text: 0 },
+        names: new Map(),
+      };
+      byKey.set(m.key, e);
+    }
+    e.concessions++;
+    e.flagged += r.flagged ? 1 : 0;
+    e.regs.push(r.reg_num);
+    e.sources[m.source]++;
+    e.names.set(m.name, (e.names.get(m.name) ?? 0) + 1);
+    for (const s of settlementsIn(texts))
+      if (!e.settlements.includes(s)) e.settlements.push(s);
+    byReg.set(r.reg_num, e);
+  }
+  const bySlug = new Map<string, MunicipalityEntry>();
+  for (const e of byKey.values()) {
+    // името, както най-често е изписано в източниците („Долни чифлик")
+    const best = [...e.names].sort((a, b) => b[1] - a[1])[0]![0];
+    e.name = municipalityLabel(best.replace(/-град$/iu, ""));
+    e.settlements.sort((a, b) => a.localeCompare(b, "bg"));
+    bySlug.set(e.slug, e);
+  }
+  const idx = { bySlug, byReg, total: rows.length };
+  municipalityIndexes.set(db, idx);
+  return idx;
+}
+
+/** Всички общини с поне една партида, по област и име. */
+export function listMunicipalities(): {
+  rows: MunicipalityRow[];
+  assigned: number;
+  total: number;
+} {
+  const db = getDb();
+  if (!db) return { rows: [], assigned: 0, total: 0 };
+  const idx = municipalityIndex(db);
+  const rows = [...idx.bySlug.values()]
+    .map(({ slug, name, oblast, concessions, flagged }) => ({
+      slug,
+      name,
+      oblast,
+      concessions,
+      flagged,
+    }))
+    .sort(
+      (a, b) =>
+        a.oblast.localeCompare(b.oblast, "bg") ||
+        a.name.localeCompare(b.name, "bg"),
+    );
+  return { rows, assigned: idx.byReg.size, total: idx.total };
+}
+
+/** Общината на партида - за връзката от страницата ѝ. */
+export function municipalityOf(
+  regNum: string,
+): { slug: string; name: string; oblast: string } | null {
+  const db = getDb();
+  if (!db) return null;
+  const e = municipalityIndex(db).byReg.get(regNum);
+  return e ? { slug: e.slug, name: e.name, oblast: e.oblast } : null;
+}
+
+/** Страницата на община: партидите ѝ и съседите от същата област. */
+export function getMunicipality(slug: string) {
+  const db = getDb();
+  if (!db) return null;
+  const idx = municipalityIndex(db);
+  const e = idx.bySlug.get(slug);
+  if (!e) return null;
+  const concessions = withSlugs(
+    db,
+    db
+      .prepare<[string], ListRow>(
+        `${LIST_SQL} WHERE c.reg_num IN (SELECT value FROM json_each(?))
+         ORDER BY c.reg_num`,
+      )
+      .all(JSON.stringify(e.regs)),
+  );
+  const neighbours = [...idx.bySlug.values()]
+    .filter((x) => x.oblast === e.oblast && x.slug !== e.slug)
+    .sort((a, b) => b.concessions - a.concessions)
+    .map(({ slug, name, concessions }) => ({ slug, name, concessions }));
+  return {
+    municipality: {
+      slug: e.slug,
+      name: e.name,
+      oblast: e.oblast,
+      settlements: e.settlements,
+      sources: e.sources,
+    },
+    concessions,
+    neighbours,
+  };
 }

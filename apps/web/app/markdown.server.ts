@@ -25,7 +25,15 @@ import {
   type ConcessionRow,
 } from "./queries.server";
 import { POSTS } from "./blog/posts";
-import { concessionHref } from "./slug";
+import {
+  blogHref,
+  companyHref,
+  concessionHref,
+  flagHref,
+  grantorHref,
+  PATHS,
+} from "./paths";
+import { eikOfSlug, kindOfSlug } from "./slug";
 
 /**
  * Markdown за агенти: заявка с Accept: text/markdown получава markdown
@@ -72,7 +80,7 @@ function concessionTable(rows: ConcessionRow[]): string {
   );
 }
 
-const FOOTER = `\n\n---\nМашинночетими данни: [OpenAPI](${BASE}/openapi.json) · [API каталог](${BASE}/.well-known/api-catalog) · [skill за агенти](${BASE}/.well-known/agent-skills/index.json). Всяко число е проследимо до източника си; индикаторите са аритметични факти, не обвинения ([методология](${BASE}/methodology)).\n`;
+const FOOTER = `\n\n---\nМашинночетими данни: [OpenAPI](${BASE}/openapi.json) · [API каталог](${BASE}/.well-known/api-catalog) · [skill за агенти](${BASE}/.well-known/agent-skills/index.json). Всяко число е проследимо до източника си; индикаторите са аритметични факти, не обвинения ([методология](${BASE}${PATHS.methodology})).\n`;
 
 function mdHome(): string {
   const s = getSummary();
@@ -88,12 +96,12 @@ function mdHome(): string {
       kinds.map((k) => [KIND_LABELS[k.kind] ?? k.kind, k.n]),
     ) +
     `\n\n## Раздели\n\n` +
-    `- [Концесии](${BASE}/concessions) — пълният списък ([CSV](${BASE}/concessions.csv))\n` +
-    `- [Концеденти](${BASE}/grantors) ([CSV](${BASE}/grantors.csv))\n` +
-    `- [Компании](${BASE}/companies) ([CSV](${BASE}/companies.csv))\n` +
-    `- [Индикатори за риск](${BASE}/flags) ([CSV](${BASE}/flags.csv))\n` +
-    `- [Карта](${BASE}/map) ([GeoJSON](${BASE}/map.geojson))\n` +
-    `- [Методология](${BASE}/methodology)`
+    `- [Концесии](${BASE}${PATHS.concessions}) — пълният списък ([CSV](${BASE}${PATHS.concessionsCsv}))\n` +
+    `- [Концеденти](${BASE}${PATHS.grantors}) ([CSV](${BASE}${PATHS.grantorsCsv}))\n` +
+    `- [Компании](${BASE}${PATHS.companies}) ([CSV](${BASE}${PATHS.companiesCsv}))\n` +
+    `- [Индикатори за риск](${BASE}${PATHS.flags}) ([CSV](${BASE}${PATHS.flagsCsv}))\n` +
+    `- [Карта](${BASE}${PATHS.map}) ([GeoJSON](${BASE}${PATHS.mapGeojson}))\n` +
+    `- [Методология](${BASE}${PATHS.methodology})`
   );
 }
 
@@ -119,7 +127,7 @@ function mdConcessions(
     `# ${heading}\n\n` +
     (filters ? `Филтри: ${filters}. ` : "") +
     `Общо ${total}; показани ${rows.length} (страница ${page}, ?page=N за следващите). ` +
-    `Пълният резултат: [CSV](${BASE}/concessions.csv${url.search}).\n\n` +
+    `Пълният резултат: [CSV](${BASE}${PATHS.concessionsCsv}${url.search}).\n\n` +
     concessionTable(rows)
   );
 }
@@ -259,13 +267,13 @@ function mdGrantors(): string {
   };
   const rows = listGrantors();
   return (
-    `# Концеденти\n\nОбщо ${rows.length}. Пълният списък: [CSV](${BASE}/grantors.csv).\n\n` +
+    `# Концеденти\n\nОбщо ${rows.length}. Пълният списък: [CSV](${BASE}${PATHS.grantorsCsv}).\n\n` +
     table(
       ["Концедент", "Вид", "Концесии", "С индикатор"],
       rows
         .slice(0, LIST_LIMIT)
         .map((r) => [
-          `[${r.name}](${BASE}/grantors/${encodeURIComponent(r.slug)})`,
+          `[${r.name}](${BASE}${grantorHref(r.slug)})`,
           KIND[r.kind] ?? r.kind,
           r.concessions,
           r.flagged,
@@ -289,15 +297,13 @@ function mdGrantorDetail(slug: string): string | null {
 function mdCompanies(): string {
   const rows = listCompanies();
   return (
-    `# Компании концесионери\n\nОбщо ${rows.length}, ключ е ЕИК. Пълният списък: [CSV](${BASE}/companies.csv).\n\n` +
+    `# Компании концесионери\n\nОбщо ${rows.length}, ключ е ЕИК. Пълният списък: [CSV](${BASE}${PATHS.companiesCsv}).\n\n` +
     table(
       ["Компания", "ЕИК", "Концесии", "Годишно общо (EUR)"],
       rows
         .slice(0, LIST_LIMIT)
         .map((r) => [
-          r.eik
-            ? `[${r.name}](${BASE}/companies/${encodeURIComponent(r.eik)})`
-            : r.name,
+          r.eik ? `[${r.name}](${BASE}${companyHref(r.name, r.eik)})` : r.name,
           r.eik ?? "—",
           r.concessions,
           r.total_annual_eur == null ? "—" : fmtEur(r.total_annual_eur),
@@ -321,18 +327,18 @@ function mdFlags(url: URL): string {
   const rows = listFlagged(code);
   return (
     `# Индикатори за риск\n\n` +
-    `Индикаторът е възпроизводим аритметичен факт, не обвинение ([методология](${BASE}/methodology)).\n\n` +
+    `Индикаторът е възпроизводим аритметичен факт, не обвинение ([методология](${BASE}${PATHS.methodology})).\n\n` +
     table(
       ["Код", "Значение", "Брой"],
       codes.map((k) => [
-        `[${k.code}](${BASE}/flags?code=${k.code})`,
+        `[${k.code}](${BASE}${flagHref(k.code)})`,
         FLAG_DESCRIPTIONS[k.code] ?? "",
         k.n,
       ]),
     ) +
     `\n\n## Концесии${code ? ` с ${code}` : " с индикатор"} (първите ${LIST_LIMIT} от ${rows.length})\n\n` +
     concessionTable(rows.slice(0, LIST_LIMIT)) +
-    `\n\nПълният списък: [CSV](${BASE}/flags.csv${code ? `?code=${code}` : ""}).`
+    `\n\nПълният списък: [CSV](${BASE}${PATHS.flagsCsv}${code ? `?code=${code}` : ""}).`
   );
 }
 
@@ -362,7 +368,7 @@ function mdBlog(): string {
     `Числата в текстовете идват от заявка към базата при отваряне на страницата.\n\n` +
     POSTS.map(
       (p) =>
-        `- [${p.title}](${BASE}/blog/${p.slug}) — ${p.lead} (${p.published})`,
+        `- [${p.title}](${BASE}${blogHref(p.slug)}) — ${p.lead} (${p.published})`,
     ).join("\n")
   );
 }
@@ -391,7 +397,7 @@ function mdMap(): string {
   return (
     `# Карта на концесиите\n\n` +
     `Интерактивната карта е HTML изглед. Машинночетимите данни са в ` +
-    `[map.geojson](${BASE}/map.geojson) — GeoJSON FeatureCollection с ` +
+    `[karta.geojson](${BASE}${PATHS.mapGeojson}) — GeoJSON FeatureCollection с ` +
     `приблизителни центроиди (свойството precision показва точността).`
   );
 }
@@ -406,27 +412,35 @@ export function renderMarkdown(url: URL): string | null {
 
   let body: string | null = null;
   if (path === "/") body = mdHome();
-  else if (path === "/concessions") body = mdConcessions(url, "Концесии");
-  else if (path === "/search")
+  else if (path === PATHS.concessions) body = mdConcessions(url, "Концесии");
+  else if (path === PATHS.search)
     body = mdConcessions(url, "Търсене в концесиите");
-  else if (path === "/grantors") body = mdGrantors();
-  else if (path === "/companies") body = mdCompanies();
-  else if (path === "/flags") body = mdFlags(url);
-  else if (path === "/methodology") body = mdMethodology();
-  else if (path === "/map") body = mdMap();
-  else if (path === "/changes") body = mdChanges();
-  else if (path === "/blog") body = mdBlog();
+  else if (path === PATHS.grantors) body = mdGrantors();
+  else if (path === PATHS.companies) body = mdCompanies();
+  else if (path === PATHS.flags) body = mdFlags(url);
+  else if (path === PATHS.methodology) body = mdMethodology();
+  else if (path === PATHS.map) body = mdMap();
+  else if (path === PATHS.changes) body = mdChanges();
+  else if (path === PATHS.blog) body = mdBlog();
   else {
-    const kind = seg("/concessions/vid/");
-    const regNum = seg("/concessions/");
-    const grantor = seg("/grantors/");
-    const company = seg("/companies/");
-    if (kind && kind in KIND_LABELS)
-      body = mdConcessions(url, KIND_PAGE_TITLES[kind] ?? kind, kind);
-    else if (regNum && !regNum.endsWith("/json"))
-      body = mdConcessionDetail(regNum);
+    // само каноничните адреси; старите минават през 301 като HTML-а
+    const kindSeg = seg(`${PATHS.concessions}/vid/`);
+    const kind = kindSeg ? kindOfSlug(kindSeg) : null;
+    const regNum = seg(`${PATHS.concessions}/`);
+    const grantor = seg(`${PATHS.grantors}/`);
+    const company = seg(`${PATHS.companies}/`);
+    if (kind?.canonical && kind.kind in KIND_LABELS)
+      body = mdConcessions(
+        url,
+        KIND_PAGE_TITLES[kind.kind] ?? kind.kind,
+        kind.kind,
+      );
+    else if (regNum && !regNum.includes("/")) body = mdConcessionDetail(regNum);
     else if (grantor) body = mdGrantorDetail(grantor);
-    else if (company) body = mdCompanyDetail(company);
+    else if (company) {
+      const eik = eikOfSlug(company);
+      if (eik) body = mdCompanyDetail(eik);
+    }
   }
 
   return body == null ? null : body + FOOTER;

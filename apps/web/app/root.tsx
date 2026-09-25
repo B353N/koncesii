@@ -7,12 +7,27 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useMatches,
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import { jsonLdScript, websiteJsonLd } from "./jsonLd";
 import { useNonce } from "./nonce";
 import "./app.css";
+// Шрифтовете на първия екран (текст и заглавие, кирилица) - preload, за да
+// не чака браузърът CSS-а, за да ги открие. Същият файл като в @font-face.
+import manropeCyr400 from "@fontsource/manrope/files/manrope-cyrillic-400-normal.woff2?url";
+import unboundedCyr700 from "@fontsource/unbounded/files/unbounded-cyrillic-700-normal.woff2?url";
+
+export const links: Route.LinksFunction = () =>
+  [manropeCyr400, unboundedCyr700].map((href) => ({
+    rel: "preload",
+    href,
+    as: "font",
+    type: "font/woff2",
+    crossOrigin: "anonymous" as const,
+  }));
+import { PATHS } from "./paths";
 
 /** Google Analytics 4 — само в production, за да не шуми dev трафикът. */
 const GA_ID = "G-GT7K4WV5PM";
@@ -21,20 +36,70 @@ function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', '${GA_ID}');`;
 
+/** Основната навигация: един ред. Останалото е в менюто „Още" и във футъра. */
 const NAV = [
-  ["/", "Начало"],
-  ["/concessions", "Концесии"],
-  ["/grantors", "Концеденти"],
-  ["/companies", "Компании"],
-  ["/map", "Карта"],
-  ["/flags", "Индикатори"],
-  ["/changes", "Промени"],
-  ["/blog", "Анализи"],
-  ["/methodology", "Методология"],
+  [PATHS.home, "Начало"],
+  [PATHS.map, "Карта"],
+  [PATHS.concessions, "Концесии"],
+  [PATHS.municipalities, "Общини"],
+  [PATHS.companies, "Компании"],
+  [PATHS.grantors, "Концеденти"],
+  [PATHS.flags, "Индикатори"],
+  [PATHS.blog, "Анализи"],
 ] as const;
+const NAV_MORE = [
+  [PATHS.changes, "Промени"],
+  [PATHS.methodology, "Методология"],
+  [PATHS.search, "Търсене"],
+] as const;
+
+/** Страници на цяла ширина (картата) слагат `handle = { fullBleed: true }`. */
+export interface RouteHandle {
+  fullBleed?: boolean;
+}
+
+/** Wordmark-ът: флагче на пилон. Флагът е в цвета на високата тежест. */
+function LogoMark() {
+  return (
+    <svg width="16" height="20" viewBox="0 0 18 22" aria-hidden="true">
+      <path
+        d="M2 1v20"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+      <path d="M3 2h13l-3.5 4.5L16 11H3z" fill="var(--color-sev-high)" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4-4" />
+    </svg>
+  );
+}
+
+const navPill = ({ isActive }: { isActive: boolean }) =>
+  `rounded-full px-1.5 py-1.5 text-[14px] font-semibold whitespace-nowrap no-underline xl:px-3 xl:text-[14.5px] ${
+    isActive ? "bg-ink text-white" : "text-ink hover:bg-paper"
+  }`;
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const nonce = useNonce();
+  const fullBleed = useMatches().some(
+    (m) => (m.handle as RouteHandle | undefined)?.fullBleed,
+  );
   return (
     <html lang="bg">
       <head>
@@ -69,80 +134,123 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </>
         )}
       </head>
-      <body className="bg-paper font-sans text-ink antialiased">
-        <header className="border-b border-limestone">
-          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-0 px-5 py-2.5 sm:h-14 sm:flex-nowrap sm:py-0">
+      <body className="bg-paper font-sans text-[15px] text-ink antialiased">
+        <header className="relative z-20 border-b border-limestone bg-raised">
+          <div className="flex h-[58px] items-center gap-6 px-4 sm:px-5">
             <Link
               to="/"
-              className="font-display text-lg font-bold tracking-[0.09em] text-ink no-underline"
+              className="flex items-center gap-2 font-display text-[17px] font-bold text-ink no-underline"
             >
-              КОНЦЕСИИ<span className="font-normal text-water-br">.com</span>
+              <LogoMark />
+              концесии
             </Link>
             <nav
-              className="-mx-5 order-last flex w-[calc(100%+2.5rem)] gap-x-4 overflow-x-auto px-5 pb-1 text-[13.5px] whitespace-nowrap sm:order-none sm:mx-0 sm:w-auto sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
+              className="hidden min-w-0 flex-1 lg:flex xl:gap-0.5"
               aria-label="Основна навигация"
             >
               {NAV.map(([to, label]) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  className={({ isActive }) =>
-                    isActive
-                      ? "py-1 text-water shadow-[inset_0_-2px_0_var(--color-water)]"
-                      : "py-1 text-ink/80 hover:text-water"
-                  }
-                >
+                <NavLink key={to} to={to} className={navPill}>
                   {label}
                 </NavLink>
               ))}
             </nav>
-            <Link
-              to="/search"
-              className="ml-auto rounded-[2px] border border-limestone bg-raised px-3 py-1 text-[13px] text-stone no-underline hover:border-water hover:text-water"
-            >
-              Търсене
-            </Link>
+            <div className="ml-auto flex items-center gap-1">
+              <Link
+                to={PATHS.search}
+                className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[14px] font-semibold text-stone no-underline hover:bg-paper hover:text-ink"
+              >
+                <SearchIcon />
+                <span className="hidden sm:inline">Търсене</span>
+              </Link>
+              <details className="group relative">
+                <summary className="flex cursor-pointer list-none items-center rounded-full px-3 py-1.5 text-[14px] font-semibold text-ink hover:bg-paper [&::-webkit-details-marker]:hidden">
+                  <span className="lg:hidden">Меню</span>
+                  <span className="hidden lg:inline">Още</span>
+                </summary>
+                <div className="absolute right-0 mt-2 grid w-56 gap-0.5 rounded-2xl border border-limestone bg-raised p-2 shadow-[0_12px_34px_rgba(21,33,43,.14)]">
+                  {NAV.map(([to, label]) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      className={(a) => `${navPill(a)} lg:hidden`}
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                  {NAV_MORE.map(([to, label]) => (
+                    <NavLink key={to} to={to} className={navPill}>
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
+              </details>
+            </div>
           </div>
         </header>
 
-        <main className="mx-auto min-h-[70vh] max-w-5xl px-5 pb-16">
-          {children}
-        </main>
+        {fullBleed ? (
+          <main>{children}</main>
+        ) : (
+          <main className="mx-auto min-h-[70vh] max-w-5xl px-4 pb-16 sm:px-5">
+            {children}
+          </main>
+        )}
 
-        <footer className="border-t-[3px] border-double border-ink">
-          <div className="mx-auto grid max-w-5xl gap-1.5 px-5 py-6 text-[13px] text-stone">
-            <span>
-              КОНЦЕСИИ — платформа за прозрачност на концесиите в България.
-              Данните са публична информация от държавните регистри; всяко число
-              е проследимо до източника си.
-            </span>
-            <span>
-              <a
-                className="text-water underline underline-offset-2"
-                href="https://github.com/B353N/koncesii"
-              >
-                Отворен код и методология
-              </a>{" "}
-              ·{" "}
+        <footer className="border-t border-limestone bg-raised">
+          <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-[14px] text-stone sm:grid-cols-[1.4fr_1fr_1fr] sm:px-5">
+            <div>
               <Link
-                to="/methodology"
-                className="text-water underline underline-offset-2"
+                to="/"
+                className="flex items-center gap-2 font-display text-[15px] font-bold text-ink no-underline"
               >
-                Индикатори за риск — методология
+                <LogoMark />
+                концесии
               </Link>
-            </span>
-            <span>
-              Изработка на сайта:{" "}
-              <a
-                className="text-water underline underline-offset-2"
-                href="https://prowebsite.bg/"
-                title="ProWebsite.bg - изработка на уеб сайтове и онлайн магазини"
-                target="_blank"
-                rel="noopener"
+              <p className="mt-3 max-w-[46ch]">
+                Платформа за прозрачност на концесиите в България. Данните са
+                публична информация от държавните регистри и всяко число води до
+                източника си.
+              </p>
+            </div>
+            <nav aria-label="Данни" className="grid content-start gap-1.5">
+              {NAV.map(([to, label]) => (
+                <Link key={to} to={to} className="text-ink hover:text-water">
+                  {label}
+                </Link>
+              ))}
+            </nav>
+            <nav aria-label="За проекта" className="grid content-start gap-1.5">
+              <Link
+                to={PATHS.methodology}
+                className="text-ink hover:text-water"
               >
-                ProWebsite.bg - изработка на уеб сайтове
+                Методология на индикаторите
+              </Link>
+              <Link to={PATHS.changes} className="text-ink hover:text-water">
+                Промени в регистъра
+              </Link>
+              <a href="/openapi.json" className="text-ink hover:text-water">
+                Отворени данни и API
               </a>
-            </span>
+              <a
+                href="https://github.com/B353N/koncesii"
+                className="text-ink hover:text-water"
+              >
+                Отворен код
+              </a>
+              <span className="mt-3">
+                Изработка на сайта:{" "}
+                <a
+                  className="text-stone underline underline-offset-2 hover:text-water"
+                  href="https://prowebsite.bg/"
+                  title="ProWebsite.bg - изработка на уеб сайтове и онлайн магазини"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  ProWebsite.bg - изработка на уеб сайтове
+                </a>
+              </span>
+            </nav>
           </div>
         </footer>
 

@@ -40,6 +40,7 @@ gtag('config', '${GA_ID}');`;
 const NAV = [
   [PATHS.map, "Карта"],
   [PATHS.concessions, "Концесии"],
+  [PATHS.municipalities, "Общини"],
   [PATHS.companies, "Компании"],
   [PATHS.grantors, "Концеденти"],
   [PATHS.flags, "Индикатори"],
@@ -89,7 +90,7 @@ function SearchIcon() {
 }
 
 const navPill = ({ isActive }: { isActive: boolean }) =>
-  `rounded-full px-3 py-1.5 text-[14.5px] font-semibold whitespace-nowrap no-underline ${
+  `rounded-full px-2.5 py-1.5 text-[14.5px] font-semibold whitespace-nowrap no-underline xl:px-3 ${
     isActive ? "bg-ink text-white" : "text-ink hover:bg-paper"
   }`;
 
@@ -143,7 +144,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               концесии
             </Link>
             <nav
-              className="hidden min-w-0 flex-1 gap-0.5 lg:flex"
+              className="hidden min-w-0 flex-1 lg:flex xl:gap-0.5"
               aria-label="Основна навигация"
             >
               {NAV.map(([to, label]) => (

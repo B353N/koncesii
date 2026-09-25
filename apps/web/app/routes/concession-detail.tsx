@@ -28,6 +28,8 @@ import {
 import {
   concessionTitles,
   getConcession,
+  getMunicipality,
+  municipalityOf,
   relatedConcessions,
   resolveConcession,
   type ConcessionDetail,
@@ -41,7 +43,13 @@ import {
   sentence,
 } from "../seo";
 import { breadcrumbJsonLd, concessionJsonLd, jsonLdScript } from "../jsonLd";
-import { companyHref, documentHref, grantorHref, PATHS } from "../paths";
+import {
+  companyHref,
+  documentHref,
+  grantorHref,
+  municipalityHref,
+  PATHS,
+} from "../paths";
 
 /**
  * Описанието се сглобява от фактите в базата: вид, страни, срок,
@@ -104,7 +112,18 @@ export function loader({ params }: Route.LoaderArgs) {
   const titles = concessionTitles(hit.reg_num);
   if (!detail || !titles) throw new Response("Not Found", { status: 404 });
 
-  return { detail, titles, related: relatedConcessions(hit.reg_num) };
+  const municipality = municipalityOf(hit.reg_num);
+  const byMunicipality = municipality
+    ? (getMunicipality(municipality.slug)?.concessions ?? [])
+        .filter((r) => r.reg_num !== hit.reg_num)
+        .slice(0, 6)
+    : [];
+  return {
+    detail,
+    titles,
+    municipality,
+    related: { ...relatedConcessions(hit.reg_num), byMunicipality },
+  };
 }
 
 /**
@@ -232,9 +251,11 @@ function fmtInputs(inputs: Record<string, unknown>): string {
 function Answers({
   detail,
   headline,
+  municipality,
 }: {
   detail: ConcessionDetail;
   headline: string;
+  municipality: { slug: string; name: string; oblast: string } | null;
 }) {
   const c = detail.concession;
   const who = detail.concessionaire;
@@ -298,6 +319,20 @@ function Answers({
         : "В регистъра не е вписано възнаграждение.",
     ],
   ];
+  if (municipality)
+    items.splice(1, 0, [
+      "В коя община е обектът?",
+      <>
+        В община{" "}
+        <Link
+          to={municipalityHref(municipality.slug)}
+          className="font-semibold text-water underline underline-offset-2"
+        >
+          {municipality.name}
+        </Link>
+        , област {municipality.oblast}.
+      </>,
+    ]);
   if (detail.flags.length)
     items.push([
       "Има ли индикатори за риск?",
@@ -322,7 +357,7 @@ function Answers({
 }
 
 export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
-  const { detail, titles, related } = loaderData;
+  const { detail, titles, related, municipality } = loaderData;
   const c = detail.concession;
   const heading = titles.headline;
   const description = descriptionOf(detail, heading);
@@ -454,6 +489,18 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
               "—"
             )}
           </div>
+          {municipality && (
+            <div className="mt-1 text-sm text-ink/85">
+              Община:{" "}
+              <Link
+                to={municipalityHref(municipality.slug)}
+                className="font-semibold text-water underline decoration-1 underline-offset-2"
+              >
+                {municipality.name}
+              </Link>
+              , област {municipality.oblast}
+            </div>
+          )}
         </div>
         <div className="col-span-2 flex flex-wrap gap-5 border-t border-limestone px-5 py-3.5 text-[13px] md:col-span-1 md:flex-col md:gap-2.5 md:border-t-0 md:border-l md:py-4">
           <div>
@@ -738,10 +785,22 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         )}
       </Razdel>
 
-      <Answers detail={detail} headline={heading} />
+      <Answers detail={detail} headline={heading} municipality={municipality} />
 
-      {(related.byGrantor.length > 0 || related.byKind.length > 0) && (
-        <section className="mt-6 grid gap-8 border-t border-limestone pt-5 md:grid-cols-2">
+      {(related.byGrantor.length > 0 ||
+        related.byKind.length > 0 ||
+        related.byMunicipality.length > 0) && (
+        <section className="mt-6 grid gap-8 border-t border-limestone pt-5 md:grid-cols-2 lg:grid-cols-3">
+          {municipality && (
+            <RelatedList
+              title={`Други концесии в община ${municipality.name}`}
+              rows={related.byMunicipality}
+              more={{
+                label: `Всички концесии в община ${municipality.name} →`,
+                to: municipalityHref(municipality.slug),
+              }}
+            />
+          )}
           {detail.grantor && (
             <RelatedList
               title={`Други концесии на ${detail.grantor.name}`}

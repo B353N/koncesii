@@ -234,7 +234,9 @@ CREATE VIRTUAL TABLE document_pages_fts USING fts5 (
 -- документа, страницата и дословния цитат. outcome казва какво е станало
 -- с кандидата в unify (E4): 'filled' — попълнил е липсващо поле
 -- (flag 'parsed_from_text'); 'agrees' — съвпада с регистъра; 'conflict' —
--- разминава се (полето става 'contradictory' + review_queue); 'display' —
+-- разминава се (полето става 'contradictory' + review_queue); 'compatible' —
+-- различна величина, не противоречие: документът дава срока без удълженията,
+-- а регистърът е по-дълъг (полето не се пипа); 'display' —
 -- няма колона в модела (напр. процент от приходите), само се показва;
 -- 'alternative' — друг кандидат за същото поле, пази се за преглед.
 CREATE TABLE extracted_facts (
@@ -257,7 +259,7 @@ CREATE TABLE extracted_facts (
   priority      INTEGER NOT NULL,       -- 1 = пряка котва, 2 = по-обща
   rank          INTEGER NOT NULL,       -- 1 = избраният кандидат за полето в партидата
   outcome       TEXT NOT NULL CHECK (outcome IN
-                  ('filled', 'agrees', 'conflict', 'display', 'alternative')),
+                  ('filled', 'agrees', 'compatible', 'conflict', 'display', 'alternative')),
   method        TEXT NOT NULL DEFAULT 'regex' CHECK (method IN ('regex', 'human_confirmed')),
   extracted_at  TEXT NOT NULL
 );

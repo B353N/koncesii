@@ -207,7 +207,7 @@ export function ingestDocuments(
       if (method === "ocr") stats.ocrPages++;
     });
 
-    const rank = documentRank(doc.title ?? rec?.filename);
+    const rank = documentRank(doc.title, rec?.filename);
     const list = candidates.get(doc.concession_id) ?? [];
     for (const f of extractDocFacts(pages)) {
       list.push({
@@ -288,9 +288,7 @@ export function applyFacts(
         );
 
       list.forEach((c, i) => {
-        let outcome:
-          "filled" | "agrees" | "conflict" | "display" | "alternative" =
-          "alternative";
+        let outcome: Outcome | "alternative" = "alternative";
         if (i === 0) {
           outcome = applyOne(db, concessionId, c, insReview, date);
           if (outcome === "filled") out.filled++;
@@ -323,13 +321,36 @@ export function applyFacts(
   return out;
 }
 
+type Outcome = "filled" | "agrees" | "compatible" | "conflict" | "display";
+
+/**
+ * Срокът в документа е изрично без удълженията („Срок на концесията, без
+ * предвидените удължавания: 180 месеца", „… за срок от 10 години, с
+ * възможност да бъде продължен"), а регистърът е по-дълъг — това са две
+ * различни величини, не противоречие.
+ */
+const EXCLUDES_EXTENSIONS_RE =
+  /без\s+(?:\p{L}+\s+)?удължавани|възможност\p{L}*[^.;]{0,80}?(?:продълж|удълж)/iu;
+
+function compatibleTerm(
+  c: Candidate,
+  value: number,
+  registry: number,
+): boolean {
+  return (
+    c.field === "term" &&
+    registry > value &&
+    EXCLUDES_EXTENSIONS_RE.test(c.quote)
+  );
+}
+
 function applyOne(
   db: Database.Database,
   concessionId: string,
   c: Candidate,
   insReview: Database.Statement,
   date: string,
-): "filled" | "agrees" | "conflict" | "display" {
+): Outcome {
   const cols = COLUMNS[c.field];
   const value = numberOf(c);
   if (!cols || value == null) return "display";
@@ -357,6 +378,9 @@ function applyOne(
   const currentNum = current["num"] as number | null;
   if (currentNum != null && agreesWithRegistry(c, value, currentNum)) {
     return "agrees";
+  }
+  if (currentNum != null && compatibleTerm(c, value, currentNum)) {
+    return "compatible";
   }
 
   // Разминаване: регистърът печели, но противоречието се записва и флагва.

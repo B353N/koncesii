@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getDb } from "./db.server";
-import { FACT_ORDER } from "./format";
+import { FACT_ORDER, SEVERITY_RANK, shortObjectTitle } from "./format";
 import { buildSlugIndex, type SlugIndex } from "./slug";
 
 /**
@@ -1036,4 +1036,98 @@ export function documentPagesForSitemap(): Array<{
       key: documentKey(r.url),
       lastmod: r.changed_at,
     }));
+}
+
+/** Една точка на картата: партида с поне един гео-кодиран обект. */
+export interface MapPoint {
+  lat: number;
+  lon: number;
+  kind: string;
+  reg_num: string;
+  slug: string;
+  /** кратък етикет (shortObjectTitle); пълното заглавие е на партидата */
+  label: string;
+  municipality: string | null;
+  company: string | null;
+  company_eik: string | null;
+  term_months: number | null;
+  annual_payment_eur: number | null;
+  flags: string[];
+  /** най-високата тежест: 0 без индикатор, 1 ниска, 2 средна, 3 висока */
+  sev: number;
+}
+
+/**
+ * Точките за картата: първият гео-кодиран обект на всяка партида, с
+ * индикаторите ѝ. Подредени по тежест, за да е подреден и списъкът до картата.
+ */
+const mapPointsCache = new WeakMap<Database.Database, MapPoint[]>();
+export function mapPoints(): MapPoint[] {
+  const db = getDb();
+  if (!db) return [];
+  const cached = mapPointsCache.get(db);
+  if (cached) return cached;
+  const rows = db
+    .prepare<
+      [],
+      Omit<MapPoint, "slug" | "label" | "flags" | "sev"> & {
+        title: string;
+        flag_codes: string | null;
+        severities: string | null;
+      }
+    >(
+      `SELECT o.lat, o.lon, o.kind, c.reg_num, c.title, o.municipality,
+              ce.name AS company, ce.eik AS company_eik, c.term_months,
+              c.annual_payment_eur,
+              (SELECT group_concat(f.code) FROM flags f WHERE f.concession_id = c.id) AS flag_codes,
+              (SELECT group_concat(f.severity) FROM flags f WHERE f.concession_id = c.id) AS severities
+         FROM objects o
+         JOIN concessions c ON c.id = o.concession_id
+         LEFT JOIN concessionaires ce ON ce.id = c.concessionaire_id
+        WHERE o.lat IS NOT NULL
+          AND o.seq = (SELECT MIN(o2.seq) FROM objects o2
+                        WHERE o2.concession_id = c.id AND o2.lat IS NOT NULL)`,
+    )
+    .all();
+  const points = withSlugs(db, rows).map(
+    ({ title, flag_codes, severities, ...r }) => ({
+      ...r,
+      label: shortObjectTitle(title),
+      flags: flag_codes ? flag_codes.split(",") : [],
+      sev: Math.max(
+        0,
+        ...(severities ?? "").split(",").map((v) => SEVERITY_RANK[v] ?? 0),
+      ),
+    }),
+  );
+  points.sort(
+    (a, b) =>
+      b.sev - a.sev ||
+      b.flags.length - a.flags.length ||
+      a.label.localeCompare(b.label, "bg"),
+  );
+  // базата е само за четене до следващия deploy - смятаме веднъж
+  mapPointsCache.set(db, points);
+  return points;
+}
+
+/** Брой партиди по код на индикатор, с тежестта му. */
+export function flagCodeCounts(): Array<{
+  code: string;
+  severity: string;
+  n: number;
+}> {
+  const db = getDb();
+  if (!db) return [];
+  return db
+    .prepare<[], { code: string; severity: string; n: number }>(
+      `SELECT code, MAX(severity) AS severity, COUNT(DISTINCT concession_id) AS n
+         FROM flags GROUP BY code`,
+    )
+    .all()
+    .sort(
+      (a, b) =>
+        (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0) ||
+        b.n - a.n,
+    );
 }

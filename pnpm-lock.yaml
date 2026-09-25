@@ -58,12 +58,12 @@ importers:
       '@fontsource/ibm-plex-mono':
         specifier: ^5.2.7
         version: 5.2.7
-      '@fontsource/ibm-plex-sans':
-        specifier: ^5.2.8
-        version: 5.2.8
-      '@fontsource/literata':
-        specifier: ^5.2.8
-        version: 5.2.8
+      '@fontsource/manrope':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/unbounded':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@react-router/node':
         specifier: 8.3.1
         version: 8.3.1(react-router@8.3.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(typescript@5.9.3)
@@ -450,11 +450,11 @@ packages:
   '@fontsource/ibm-plex-mono@5.2.7':
     resolution: {integrity: sha512-MKAb8qV+CaiMQn2B0dIi1OV3565NYzp3WN5b4oT6LTkk+F0jR6j0ZN+5BKJiIhffDC3rtBULsYZE65+0018z9w==}
 
-  '@fontsource/ibm-plex-sans@5.2.8':
-    resolution: {integrity: sha512-eztSXjDhPhcpxNIiGTgMebdLP9qS4rWkysuE1V7c+DjOR0qiezaiDaTwQE7bTnG5HxAY/8M43XKDvs3cYq6ZYQ==}
+  '@fontsource/manrope@5.3.0':
+    resolution: {integrity: sha512-obJ1Dv3+uCA6HlHgW8u4BGYxJR9In2HW7gjJhlflEvkrj1X1iSEwu0fToL+JYGC/FEKFfIz1sBuPduvcL2gIAA==}
 
-  '@fontsource/literata@5.2.8':
-    resolution: {integrity: sha512-Rj3eEQeu7+yBw9ZjXxcRiKDDrhbhpCyb0b79VJVCjDF1fdgJ8gDr9C1SRFLwfi+VaHEkhJDnRGm25fq1Yk+wNg==}
+  '@fontsource/unbounded@5.3.0':
+    resolution: {integrity: sha512-pPD6hsTnjoQRr6pCsqMHbHBfauB4LZygCNQEUJHu+CO2wzDFHqELEFSG7sTwo5Z5Gr4q3OK0fIILOXBJDv6lcw==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2358,9 +2358,9 @@ snapshots:
 
   '@fontsource/ibm-plex-mono@5.2.7': {}
 
-  '@fontsource/ibm-plex-sans@5.2.8': {}
+  '@fontsource/manrope@5.3.0': {}
 
-  '@fontsource/literata@5.2.8': {}
+  '@fontsource/unbounded@5.3.0': {}
 
   '@img/colour@1.1.0':
     optional: true

@@ -313,8 +313,8 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             {c.status ? ` · ${c.status.toLowerCase()}` : ""}
           </div>
           <h1
-            className={`font-display font-bold leading-tight text-balance ${
-              heading.length > 140 ? "text-lg" : "text-2xl"
+            className={`font-sans font-bold leading-tight text-balance ${
+              heading.length > 140 ? "text-xl" : "text-[26px]"
             }`}
           >
             {heading}

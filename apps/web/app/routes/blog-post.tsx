@@ -76,7 +76,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
       />
 
       <article className="prose-koncesii mx-auto max-w-[72ch] pt-6 pb-8">
-        <h1 className="font-display text-3xl leading-tight font-bold text-balance">
+        <h1 className="font-display text-2xl leading-tight font-bold tracking-[-0.02em] text-balance sm:text-3xl">
           {post.title}
         </h1>
         <p className="mt-2 text-[17px] text-stone">{post.lead}</p>

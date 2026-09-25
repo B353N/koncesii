@@ -1,6 +1,7 @@
 import type { Route } from "./+types/map";
 import { DataPending } from "../components";
 import { MapApp } from "../map-app";
+import { facadePaths } from "../map-facade";
 import { getSummary, mapPoints } from "../queries.server";
 import type { RouteHandle } from "../root";
 import { absUrl, ogDescriptors, pageTitle } from "../seo";
@@ -33,6 +34,7 @@ export function loader({}: Route.LoaderArgs) {
   return {
     summary: getSummary(),
     initial: points.slice(0, 40),
+    facade: facadePaths(points),
     geocoded: points.length,
     mapKinds: [...onMap]
       .map(([kind, n]) => ({ kind, n }))
@@ -41,7 +43,7 @@ export function loader({}: Route.LoaderArgs) {
 }
 
 export default function MapPage({ loaderData }: Route.ComponentProps) {
-  const { summary, initial, geocoded, mapKinds } = loaderData;
+  const { summary, initial, facade, geocoded, mapKinds } = loaderData;
   if (!summary)
     return (
       <div className="mx-auto max-w-5xl px-5">
@@ -75,6 +77,7 @@ export default function MapPage({ loaderData }: Route.ComponentProps) {
         </p>
       }
       initial={initial}
+      facade={facade}
       kinds={mapKinds}
       geocoded={geocoded}
       total={summary.concessions}

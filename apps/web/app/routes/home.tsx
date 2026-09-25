@@ -14,6 +14,7 @@ import {
   SEVERITY_RANK,
 } from "../format";
 import { FlagPin, MapApp } from "../map-app";
+import { facadePaths } from "../map-facade";
 import type { RouteHandle } from "../root";
 import {
   flagCodeCounts,
@@ -64,6 +65,7 @@ export function loader({}: Route.LoaderArgs) {
   return {
     summary: getSummary(),
     initial: points.slice(0, INITIAL_LIST),
+    facade: facadePaths(points),
     geocoded: points.length,
     mapKinds: [...onMap]
       .map(([kind, n]) => ({ kind, n }))
@@ -86,6 +88,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   const {
     summary,
     initial,
+    facade,
     geocoded,
     mapKinds,
     kinds,
@@ -119,6 +122,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </p>
         }
         initial={initial}
+        facade={facade}
         kinds={mapKinds}
         geocoded={geocoded}
         total={summary.concessions}

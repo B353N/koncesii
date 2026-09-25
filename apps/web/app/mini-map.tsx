@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { Map as MlMap } from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { pinImage } from "./map-pin";
 import { BASEMAP_STYLE } from "./map-style";
@@ -34,8 +33,12 @@ export function MiniMap({
   useEffect(() => {
     let map: MlMap | undefined;
     let cancelled = false;
-    import("maplibre-gl")
-      .then((maplibregl) => {
+    // CSS-ът заедно с библиотеката: иначе е render-blocking на страницата
+    Promise.all([
+      import("maplibre-gl"),
+      import("maplibre-gl/dist/maplibre-gl.css"),
+    ])
+      .then(([maplibregl]) => {
         if (cancelled || !container.current) return;
         maplibregl.setWorkerUrl(maplibreWorkerUrl);
         map = new maplibregl.Map({

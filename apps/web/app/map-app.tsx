@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Form, Link } from "react-router";
 import type { Map as MlMap, GeoJSONSource, Popup } from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
 // maplibre-gl 6 е само ESM и не вгражда worker-а като blob: - Vite го
 // бъндълва като самостоятелен файл (?worker&url) и го подаваме през
 // setWorkerUrl преди първата карта. Същият origin → покрива се от
 // worker-src 'self' в CSP (entry.server.tsx).
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { FLAG_DESCRIPTIONS, FLAG_SHORT, KIND_LABELS } from "./format";
+import { FACADE_H, FACADE_W, type FacadePath } from "./map-facade";
 import {
   BASEMAP_STYLE,
   BG_BOUNDS,
@@ -121,9 +121,21 @@ export interface MapAppProps {
   kinds: Array<{ kind: string; n: number }>;
   geocoded: number;
   total: number;
+  /** статичната карта преди MapLibre (map-facade.ts), рендирана на сървъра */
+  facade: FacadePath[];
 }
 
 const LIST_LIMIT = 80;
+
+/** Взаимодействията, след които картата се зарежда сама на широк екран. */
+const ARM_EVENTS = [
+  "pointermove",
+  "pointerdown",
+  "wheel",
+  "touchstart",
+  "keydown",
+  "scroll",
+] as const;
 
 export function MapApp({
   heading,
@@ -132,10 +144,18 @@ export function MapApp({
   kinds,
   geocoded,
   total,
+  facade,
 }: MapAppProps) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
   const popupRef = useRef<Popup | null>(null);
+  /** партида, поискана от списъка, преди картата да е готова */
+  const pendingRef = useRef<MapPoint | null>(null);
+  // MapLibre (1,5 MB с worker-а) и плочките тръгват чак при първо
+  // взаимодействие: на телефон с бутона върху статичната карта, на широк
+  // екран и при първо движение на мишката или скрол. Така първото
+  // зареждане не плаща за картата (Lighthouse не взаимодейства).
+  const [armed, setArmed] = useState(false);
   const [points, setPoints] = useState<MapPoint[] | null>(null);
   const [bounds, setBounds] = useState<[number, number, number, number]>();
   const [kindOn, setKindOn] = useState<Set<string>>(new Set());
@@ -170,15 +190,36 @@ export function MapApp({
   }, [filtered, bounds]);
   const list = ready ? inView : initial;
 
-  // картата: динамичен import след хидратация, данните паралелно
+  // на широк екран: първото взаимодействие зарежда картата; при
+  // Save-Data само бутонът
   useEffect(() => {
+    if (armed) return;
+    const saveData =
+      (navigator as { connection?: { saveData?: boolean } }).connection
+        ?.saveData === true;
+    if (saveData || !window.matchMedia("(min-width: 1024px)").matches) return;
+    const arm = () => setArmed(true);
+    for (const ev of ARM_EVENTS)
+      window.addEventListener(ev, arm, { once: true, passive: true });
+    return () => {
+      for (const ev of ARM_EVENTS) window.removeEventListener(ev, arm);
+    };
+  }, [armed]);
+
+  // картата: динамичен import (JS и CSS), данните паралелно
+  useEffect(() => {
+    if (!armed) return;
     let cancelled = false;
     let map: MlMap | undefined;
     const data = fetch(PATHS.mapPoints).then(
       (r) => r.json() as Promise<MapPoint[]>,
     );
-    Promise.all([import("maplibre-gl"), data])
-      .then(([maplibregl, pts]) => {
+    Promise.all([
+      import("maplibre-gl"),
+      import("maplibre-gl/dist/maplibre-gl.css"),
+      data,
+    ])
+      .then(([maplibregl, , pts]) => {
         if (cancelled || !container.current) return;
         maplibregl.setWorkerUrl(maplibreWorkerUrl);
         map = new maplibregl.Map({
@@ -219,6 +260,10 @@ export function MapApp({
           setPoints(pts);
           const b = map.getBounds();
           setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+          // „Покажи на картата", натиснат докато картата се е зареждала
+          const pending = pendingRef.current;
+          pendingRef.current = null;
+          if (pending) flyTo(map, maplibregl.Popup, pending);
         });
         map.on("moveend", () => {
           const b = map!.getBounds();
@@ -234,7 +279,7 @@ export function MapApp({
       map?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [armed]);
 
   // филтрите сменят и точките на картата
   useEffect(() => {
@@ -304,14 +349,23 @@ export function MapApp({
       .addTo(map);
   }
 
-  async function showOnMap(p: MapPoint) {
-    const map = mapRef.current;
-    if (!map) return;
-    const { Popup: PopupCtor } = await import("maplibre-gl");
+  function flyTo(map: MlMap, PopupCtor: typeof Popup, p: MapPoint) {
     map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 10.5) });
     map.once("moveend", () => openPopup(map, PopupCtor, p));
+  }
+
+  async function showOnMap(p: MapPoint) {
     if (window.matchMedia("(max-width: 1023px)").matches)
       container.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const map = mapRef.current;
+    if (!map || !ready) {
+      // картата още не е заредена: тръгва сега и лети, щом е готова
+      pendingRef.current = p;
+      setArmed(true);
+      return;
+    }
+    const { Popup: PopupCtor } = await import("maplibre-gl");
+    flyTo(map, PopupCtor, p);
   }
 
   function highlight(p: MapPoint | null) {
@@ -373,24 +427,32 @@ export function MapApp({
             >
               Всички
             </button>
-            {kinds.map(({ kind, n }) => (
-              <button
-                key={kind}
-                type="button"
-                aria-pressed={kindOn.has(kind)}
-                onClick={() => toggleKind(kind)}
-                className={chip(kindOn.has(kind))}
-              >
-                <i
-                  className="inline-block h-[9px] w-[9px] rounded-full"
-                  style={{
-                    background: KIND_COLORS[kind] ?? DEFAULT_KIND_COLOR,
-                  }}
-                />
-                {KIND_LABELS[kind] ?? kind}
-                <span className="font-medium opacity-60">{n}</span>
-              </button>
-            ))}
+            {kinds.map(({ kind, n }) => {
+              const on = kindOn.has(kind);
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleKind(kind)}
+                  className={chip(on)}
+                >
+                  <i
+                    className="inline-block h-[9px] w-[9px] rounded-full"
+                    style={{
+                      background: KIND_COLORS[kind] ?? DEFAULT_KIND_COLOR,
+                    }}
+                  />
+                  {KIND_LABELS[kind] ?? kind}
+                  {/* явен цвят вместо opacity: броят държи AA контраст */}
+                  <span
+                    className={`font-medium ${on ? "text-[#c9d1d6]" : "text-stone"}`}
+                  >
+                    {n}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <label className="mt-3.5 flex cursor-pointer items-center gap-2.5 text-[14px] font-semibold">
             <input
@@ -434,29 +496,27 @@ export function MapApp({
                 </div>
                 <FlagPills flags={p.flags} />
               </div>
-              {ready && (
-                <button
-                  type="button"
-                  onClick={() => void showOnMap(p)}
-                  aria-label={`Покажи на картата: ${p.label}`}
-                  title="Покажи на картата"
-                  className="h-8 w-8 self-start rounded-full text-stone hover:bg-paper hover:text-ink"
+              <button
+                type="button"
+                onClick={() => void showOnMap(p)}
+                aria-label={`Покажи на картата: ${p.label}`}
+                title="Покажи на картата"
+                className="h-8 w-8 self-start rounded-full text-stone hover:bg-paper hover:text-ink"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  className="mx-auto"
+                  aria-hidden="true"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    className="mx-auto"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
-                    <circle cx="12" cy="9.5" r="2.5" />
-                  </svg>
-                </button>
-              )}
+                  <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+                  <circle cx="12" cy="9.5" r="2.5" />
+                </svg>
+              </button>
             </li>
           ))}
           {ready && !list.length && (
@@ -486,6 +546,49 @@ export function MapApp({
             aria-label="Карта на концесиите"
           />
         </div>
+        {!ready && !failed && (
+          <div className="absolute inset-0 z-[1] bg-[#f1f3ee]">
+            <svg
+              viewBox={`0 0 ${FACADE_W} ${FACADE_H}`}
+              preserveAspectRatio="xMidYMid meet"
+              className="h-full w-full p-6"
+              role="img"
+              aria-label={`${nf.format(geocoded)} партиди с известно място върху картата на България`}
+            >
+              {facade.map((p) => (
+                <g key={`${p.color}${p.flagged}`}>
+                  {p.flagged && (
+                    <path
+                      d={p.d}
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth={10}
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                  <path
+                    d={p.d}
+                    fill="none"
+                    stroke={p.color}
+                    strokeWidth={p.flagged ? 7 : 5}
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              ))}
+            </svg>
+            <button
+              type="button"
+              onClick={() => setArmed(true)}
+              disabled={armed}
+              aria-live="polite"
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-ink px-5 py-2.5 text-[14px] font-bold whitespace-nowrap text-white shadow-[0_6px_20px_rgba(21,33,43,.25)] hover:bg-water disabled:bg-stone"
+            >
+              {armed ? "Картата се зарежда…" : "Отвори интерактивната карта"}
+            </button>
+          </div>
+        )}
         {failed && (
           <p className="absolute inset-x-4 top-4 rounded-xl bg-raised p-4 text-stone">
             Картата не можа да се зареди. Списъкът вляво работи, а данните са

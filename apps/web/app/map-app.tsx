@@ -444,7 +444,12 @@ export function MapApp({
                     }}
                   />
                   {KIND_LABELS[kind] ?? kind}
-                  <span className="font-medium opacity-60">{n}</span>
+                  {/* явен цвят вместо opacity: броят държи AA контраст */}
+                  <span
+                    className={`font-medium ${on ? "text-[#c9d1d6]" : "text-stone"}`}
+                  >
+                    {n}
+                  </span>
                 </button>
               );
             })}

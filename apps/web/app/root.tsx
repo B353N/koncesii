@@ -146,6 +146,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex h-[58px] items-center gap-6 px-4 sm:px-5">
             <Link
               to="/"
+              aria-label="Концесии - начало"
               className="flex items-center gap-2 font-display text-[17px] font-bold text-ink no-underline"
             >
               <LogoMark />
@@ -164,6 +165,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-1">
               <Link
                 to={PATHS.search}
+                aria-label="Търсене"
                 className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[14px] font-semibold text-stone no-underline hover:bg-paper hover:text-ink"
               >
                 <SearchIcon />
@@ -208,7 +210,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div>
               <Link
                 to="/"
-                  className="flex items-center gap-2 font-display text-[15px] font-bold text-ink no-underline"
+                aria-label="Концесии - начало"
+                className="flex items-center gap-2 font-display text-[15px] font-bold text-ink no-underline"
               >
                 <LogoMark />
                 концесии

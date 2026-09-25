@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -28,8 +29,8 @@ import { promisify } from "node:util";
  * Excel/ODT → LibreOffice → PDF → същото. Изображения → tesseract. XML/HTML
  * → текстът между таговете. ZIP, RAR, 7z → всеки файл вътре, по ред на
  * името (unzip; RAR/7z — 7z/unar, иначе bsdtar, който на macOS е системният
- * `tar`, но не чете „solid" RAR). Повредено PDF без текстов слой → OCR на
- * всяка страница. Инструментите са детерминистични при фиксирани версии;
+ * `tar`, но не чете „solid" RAR). Повредено PDF → поправка с Ghostscript,
+ * иначе OCR на всяка страница, която се рендерира. Инструментите са детерминистични при фиксирани версии;
  * версиите се записват в .meta.json.
  *
  * Всеки инструмент тръгва в собствена група процеси с лимит за време; един
@@ -232,11 +233,13 @@ export interface Tools {
   soffice: string | null;
   unzip: string | null;
   /**
-   * Разархиваторите за RAR/7z по ред на опитване: „команда: версия; …".
-   * 7z/unar първи — само те четат „solid" RAR; bsdtar (системният tar на
-   * macOS) — последен.
+   * Разархиваторите по ред на опитване: „команда: версия; …". unar първи
+   * (стари и „solid" RAR, имена в CP866), после 7-Zip, bsdtar (системният
+   * tar на macOS) — последен.
    */
   archiver: string | null;
+  /** Ghostscript — поправя повредени PDF, които poppler не може да отвори. */
+  gs: string | null;
 }
 
 async function version(cmd: string, args: string[]): Promise<string | null> {
@@ -259,9 +262,11 @@ async function version(cmd: string, args: string[]): Promise<string | null> {
 /** Всички налични разархиватори за RAR/7z, по ред на опитване. */
 async function detectArchiver(): Promise<string | null> {
   const candidates: Array<[string, string[]]> = [
+    // unar първи: чете „solid" и стари RAR методи, които 7-Zip не поддържа,
+    // и сам разпознава кирилските имена в CP866 в ZIP от български Windows
+    ["unar", ["-v"]],
     ["7zz", ["i"]],
     ["7z", ["i"]],
-    ["unar", ["-v"]],
     ["bsdtar", ["--version"]],
     ["tar", ["--version"]], // на macOS системният tar е bsdtar
   ];
@@ -285,7 +290,7 @@ function archiverCommands(tools: Tools): string[] {
 }
 
 export async function detectTools(): Promise<Tools> {
-  const [pdftotext, pdftoppm, tesseract, soffice, unzip, archiver] =
+  const [pdftotext, pdftoppm, tesseract, soffice, unzip, archiver, gs] =
     await Promise.all([
       version("pdftotext", ["-v"]),
       version("pdftoppm", ["-v"]),
@@ -293,8 +298,9 @@ export async function detectTools(): Promise<Tools> {
       version("soffice", ["--version"]),
       version("unzip", ["-v"]),
       detectArchiver(),
+      version("gs", ["--version"]),
     ]);
-  return { pdftotext, pdftoppm, tesseract, soffice, unzip, archiver };
+  return { pdftotext, pdftoppm, tesseract, soffice, unzip, archiver, gs };
 }
 
 // ── Разпознаване на формата по съдържанието ──────────────────────────────
@@ -348,7 +354,19 @@ export function sniff(head: Buffer, ext: string): Sniffed {
   ) {
     return "image";
   }
-  // XML (напр. електронни формуляри, .onkr) и HTML — текстът е между таговете
+  // XML (напр. електронни формуляри, .onkr) и HTML — текстът е между таговете;
+  // Windows често ги записва в UTF-16 с BOM
+  if (
+    (head[0] === 0xff && head[1] === 0xfe) ||
+    (head[0] === 0xfe && head[1] === 0xff)
+  ) {
+    const le = head[0] === 0xff;
+    const decoded = new TextDecoder(le ? "utf-16le" : "utf-16be")
+      .decode(head.subarray(2, head.length - (head.length % 2)))
+      .trimStart()
+      .toLowerCase();
+    if (/^<(\?xml|!doctype|html)/.test(decoded)) return "markup";
+  }
   const start = head
     .toString("latin1")
     .replace(/^\xef\xbb\xbf/, "")
@@ -484,17 +502,45 @@ async function ocrWholePdf(
   return { pages, methods: pages.map((p) => (p.trim() ? "ocr" : "empty")) };
 }
 
+/** Ghostscript пренаписва повреденото PDF (счупена xref таблица) наново. */
+async function repairPdf(
+  path: string,
+  work: string,
+  ctx: Ctx,
+): Promise<string | null> {
+  const out = join(work, "repaired.pdf");
+  const r = await run(
+    "gs",
+    [
+      "-q",
+      "-dNOPAUSE",
+      "-dBATCH",
+      "-dSAFER",
+      "-sDEVICE=pdfwrite",
+      `-sOutputFile=${out}`,
+      path,
+    ],
+    { timeoutMs: timeLeft(ctx) },
+  );
+  return r.code === 0 && existsSync(out) ? out : null;
+}
+
 async function pdfPages(
   path: string,
   tools: Tools,
   work: string,
   ctx: Ctx,
+  repaired = false,
 ): Promise<Pages> {
   let pages: string[];
   try {
     pages = await pdfText(path, ctx);
   } catch (e) {
     if (e instanceof TimeoutError) throw e;
+    if (tools.gs && !repaired) {
+      const fixed = await repairPdf(path, work, ctx);
+      if (fixed) return pdfPages(fixed, tools, work, ctx, true);
+    }
     return ocrWholePdf(path, tools, work, ctx, e as Error);
   }
   ctx.progress.pages = pages.length;
@@ -569,10 +615,19 @@ export function markupText(buf: Buffer): string {
   const head = buf.subarray(0, 200).toString("latin1");
   const enc = /encoding\s*=\s*["']([\w-]+)["']/i.exec(head)?.[1]?.toLowerCase();
   let text: string;
-  try {
-    text = new TextDecoder(enc && enc !== "utf-8" ? enc : "utf-8").decode(buf);
-  } catch {
-    text = buf.toString("utf8");
+  if (buf[0] === 0xff && buf[1] === 0xfe) {
+    text = new TextDecoder("utf-16le").decode(buf.subarray(2));
+  } else if (buf[0] === 0xfe && buf[1] === 0xff) {
+    text = new TextDecoder("utf-16be").decode(buf.subarray(2));
+  } else {
+    try {
+      // декларацията „UTF-16" без BOM е рядка — тогава UTF-8
+      text = new TextDecoder(
+        enc && enc !== "utf-8" && !enc.startsWith("utf-16") ? enc : "utf-8",
+      ).decode(buf);
+    } catch {
+      text = buf.toString("utf8");
+    }
   }
   return text
     .replace(/^﻿/, "")
@@ -624,6 +679,7 @@ async function filePages(
     const dir = join(work, "archive");
     mkdirSync(dir, { recursive: true });
     await unpack(path, kind, tools, dir, ctx);
+    fixEntryNames(dir);
     const files = walk(dir).sort();
     const out: Pages & { entries: NonNullable<TextMeta["entries"]> } = {
       pages: [],
@@ -655,8 +711,9 @@ async function filePages(
 }
 
 /**
- * Разархивира в dir: ZIP с unzip (ако го има), всичко друго — с първия
- * разархиватор, който успее. bsdtar не чете „solid" RAR, 7z и unar — да.
+ * Разархивира в dir: ZIP първо с unzip, после — и всичко друго — с първия
+ * разархиватор, който успее. bsdtar не чете „solid" RAR; 7-Zip не чете
+ * някои стари RAR методи и кирилски имена в CP866 на macOS; unar — да.
  */
 async function unpack(
   path: string,
@@ -675,7 +732,7 @@ async function unpack(
   const cmds = archiverCommands(tools);
   if (cmds.length === 0) {
     throw new Error(
-      `липсва разархиватор за ${kind} — macOS: brew install sevenzip (или системният tar за не-solid архиви)`,
+      `липсва разархиватор за ${kind} — macOS: brew install unar sevenzip`,
     );
   }
   const failures: string[] = [];
@@ -692,13 +749,36 @@ async function unpack(
     if (r.code === 0) return;
     failures.push(`${cmd}: ${firstLine(r.stderr) || `код ${r.code}`}`);
   }
-  const solid = failures.some((f) => /solid/i.test(f));
   throw new Error(
     failures.join(" | ") +
-      (solid && !cmds.some((c) => c !== "bsdtar" && c !== "tar")
-        ? " — за „solid“ RAR: brew install sevenzip"
-        : ""),
+      (!cmds.includes("unar") ? " — опитайте с unar: brew install unar" : ""),
   );
+}
+
+const UTF8 = new TextDecoder("utf-8", { fatal: true });
+const CP866 = new TextDecoder("ibm866");
+
+/**
+ * Имената в архива, които не са валиден UTF-8 (ZIP от български Windows
+ * пази кирилицата в CP866), се преименуват към декодираното име — иначе
+ * Node не може да ги отвори, а инструментите не могат да ги получат.
+ */
+function fixEntryNames(dir: string): void {
+  for (const raw of readdirSync(dir, { encoding: "buffer" })) {
+    let name: string;
+    try {
+      name = UTF8.decode(raw);
+    } catch {
+      const decoded = CP866.decode(raw).replace(/[/\\\0]/g, "_");
+      // при съвпадение с вече съществуващо име — уникален суфикс
+      name = existsSync(join(dir, decoded))
+        ? `${decoded}-${raw.toString("hex").slice(0, 8)}`
+        : decoded;
+      renameSync(Buffer.concat([Buffer.from(`${dir}/`), raw]), join(dir, name));
+    }
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) fixEntryNames(p);
+  }
 }
 
 function walk(dir: string): string[] {
@@ -931,13 +1011,14 @@ async function main() {
     );
     process.exit(1);
   }
-  if (!tools.archiver) {
+  if (!tools.archiver?.startsWith("unar:")) {
     console.warn(
-      "[extract] без 7z/unar/bsdtar RAR и 7z архивите остават неподдържани — macOS: brew install sevenzip",
+      "[extract] без unar старите/„solid“ RAR и ZIP с кирилски имена (CP866) може да не се отворят — macOS: brew install unar",
     );
-  } else if (!/^(7zz|7z|unar):/.test(tools.archiver)) {
+  }
+  if (!tools.gs) {
     console.warn(
-      "[extract] само bsdtar: „solid“ RAR архивите няма да се отворят — brew install sevenzip",
+      "[extract] без Ghostscript повредените PDF минават направо през OCR — macOS: brew install ghostscript",
     );
   }
   if (!tools.tesseract) {

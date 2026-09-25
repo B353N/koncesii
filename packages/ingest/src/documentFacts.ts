@@ -146,7 +146,7 @@ function currencyOf(unit: string): "BGN" | "EUR" {
   return /^(евро|eur|€)$/iu.test(unit) ? "EUR" : "BGN";
 }
 
-interface MoneyMatch {
+export interface MoneyMatch {
   raw: string;
   amount: number;
   currency: "BGN" | "EUR";
@@ -157,7 +157,7 @@ interface MoneyMatch {
   vat: "with" | "without" | null;
 }
 
-function moneyMatches(text: string): MoneyMatch[] {
+export function moneyMatches(text: string): MoneyMatch[] {
   const out: MoneyMatch[] = [];
   MONEY_RE.lastIndex = 0;
   for (let m = MONEY_RE.exec(text); m; m = MONEY_RE.exec(text)) {

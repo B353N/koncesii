@@ -20,6 +20,9 @@ export function pageTitle(text: string): string {
  */
 export function normalizePath(pathname: string): string {
   const p = pathname.replace(/\/+$/, "") || "/";
+  // файловете (/assets/map-app-B_NFMq7G.js, /favicon.svg, sitemap-*.xml)
+  // са с точни имена - хешовете на Vite имат главни букви
+  if (p.startsWith("/assets/") || /\.[a-z0-9]{2,5}$/i.test(p)) return p;
   return p.replace(/[A-Z]+/g, (m) => m.toLowerCase());
 }
 

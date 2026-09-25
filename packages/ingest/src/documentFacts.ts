@@ -188,6 +188,12 @@ const TERM_RE = new RegExp(
   "iu",
 );
 
+/** „… години и 6 (шест) месеца" — точно след годините. */
+const EXTRA_MONTHS_RE = new RegExp(
+  String.raw`^\s*и\s+(\d{1,2})\s*(?:${WORDS}\s*)?(?:месеца|месец|мес\.)(?![\p{L}])`,
+  "iu",
+);
+
 const PERCENT_RE =
   /(?<![\d.,])(\d{1,2}(?:[.,]\d{1,3})?)\s*(?:\([^()]{0,80}\)\s*)?(?:%|на\s+сто|процента?)(?![\p{L}])/iu;
 
@@ -287,7 +293,7 @@ const REFERENCE_BEFORE_ANCHOR_RE =
   /(?<!\p{L})(?:изтич\p{L}*|края|целия|през|от)(?:\s+на)?\s+$/iu;
 
 const SKIP_PREFIX_RE =
-  /не\s+може|по-дълъг|по-кратък|максимал|минимал|не\s+по-малк|удълж|продълж|изтичане|гаранци|неустойк|депозит|лихв|санкци|обезпечени/iu;
+  /не\s+може|по-дълъг|по-кратък|максимал|минимал|минимум|не\s+по-малк|удълж|продълж|изтичане|гаранци|неустойк|депозит|лихв|санкци|обезпечени|досегаш|(?:увеличава|намалява)\p{L}*\s+с(?!\p{L})/iu;
 
 /**
  * Обявлението за възложена концесия носи и „Първоначална прогнозна обща
@@ -408,13 +414,24 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
             continue;
           }
           const n = Number(t[1]);
-          const months = /^мес/iu.test(t[2]!) ? n : n * 12;
+          let months = /^мес/iu.test(t[2]!) ? n : n * 12;
+          let raw = t[0];
+          // „26 години и 6 месеца" — месеците след годините се добавят
+          if (!/^мес/iu.test(t[2]!)) {
+            const extra = EXTRA_MONTHS_RE.exec(
+              win.slice(t.index + t[0].length),
+            );
+            if (extra) {
+              months += Number(extra[1]);
+              raw += extra[0];
+            }
+          }
           if (months < 1 || months > 1200) continue;
           const start = aEnd + t.index;
-          const end = start + t[0].length;
+          const end = start + raw.length;
           push({
             field: anchor.field,
-            valueRaw: t[0].trim(),
+            valueRaw: raw.trim(),
             amount: null,
             currency: null,
             eur: null,

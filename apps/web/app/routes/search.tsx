@@ -14,6 +14,7 @@ import {
 } from "../queries.server";
 import { concessionHref } from "../slug";
 import { pageTitle } from "../seo";
+import { documentHref } from "../paths";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -89,7 +90,7 @@ export default function Search({ loaderData }: Route.ComponentProps) {
                 className="border-t border-dashed border-limestone pt-3 first:border-t-0 first:pt-0"
               >
                 <Link
-                  to={`${concessionHref(h.slug)}/documents/${h.document_key}#str-${h.page}`}
+                  to={`${documentHref(h.slug, h.document_key)}#str-${h.page}`}
                   className="font-semibold text-water underline decoration-1 underline-offset-2"
                 >
                   {h.document_title ?? "Документ"}, стр. {h.page}

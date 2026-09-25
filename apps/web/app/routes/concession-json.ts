@@ -3,7 +3,7 @@ import type { Route } from "./+types/concession-json";
 import { getConcession, resolveConcession } from "../queries.server";
 import { concessionHref } from "../slug";
 
-/** Resource route: /concessions/:slug/json - машинночетимият изглед. */
+/** Resource route: /koncesii/:slug/json - машинночетимият изглед. */
 export function loader({ params }: Route.LoaderArgs) {
   const hit = resolveConcession(params.slug);
   if (!hit) throw new Response("Not Found", { status: 404 });

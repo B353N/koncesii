@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link, redirect } from "react-router";
 import type { Route } from "./+types/concession-detail";
 import {
@@ -16,6 +17,7 @@ import {
   FACT_OUTCOMES,
   FLAG_CONDITIONS,
   FLAG_DESCRIPTIONS,
+  FLAG_SHORT,
   fmtDocumentMeta,
   fmtEur,
   fmtFact,
@@ -24,7 +26,10 @@ import {
   KIND_LABELS,
 } from "../format";
 import {
+  concessionTitles,
   getConcession,
+  getMunicipality,
+  municipalityOf,
   relatedConcessions,
   resolveConcession,
   type ConcessionDetail,
@@ -33,61 +38,48 @@ import { concessionHref } from "../slug";
 import {
   absUrl,
   clampDescription,
-  concessionTitle,
   pageTitle,
+  regLabel,
   sentence,
 } from "../seo";
 import { breadcrumbJsonLd, concessionJsonLd, jsonLdScript } from "../jsonLd";
-
-/** Заглавието на страницата: регистровото, допълнено с вид и концедент. */
-function titleOf(detail: ConcessionDetail): string {
-  const c = detail.concession;
-  return concessionTitle({
-    title: c.title,
-    regNum: c.reg_num,
-    kindLabel: detail.objects[0]
-      ? (KIND_LABELS[detail.objects[0].kind] ?? null)
-      : null,
-    objectDescription: detail.objects[0]?.description ?? null,
-    grantorName: detail.grantor?.name ?? null,
-    concessionKindLabel: c.kind
-      ? (CONCESSION_KIND_LABELS[c.kind] ?? null)
-      : null,
-  });
-}
+import {
+  companyHref,
+  documentHref,
+  grantorHref,
+  municipalityHref,
+  PATHS,
+} from "../paths";
 
 /**
  * Описанието се сглобява от фактите в базата: вид, страни, срок,
  * възнаграждение, статус. Липсващ факт просто отпада - нищо не се
  * попълва по предположение.
  */
-function descriptionOf(detail: ConcessionDetail): string {
+function descriptionOf(detail: ConcessionDetail, headline: string): string {
   const c = detail.concession;
-  const kind = detail.objects[0]
-    ? (KIND_LABELS[detail.objects[0].kind] ?? null)
-    : null;
+  const who = detail.concessionaire
+    ? `концесионер ${detail.concessionaire.name}${
+        detail.concessionaire.eik ? ` (ЕИК ${detail.concessionaire.eik})` : ""
+      }`
+    : "концесионерът не е вписан";
   return clampDescription(
     sentence([
-      kind ? `${kind}:` : "Концесия:",
-      detail.grantor ? `концедент ${detail.grantor.name},` : null,
-      detail.concessionaire
-        ? `концесионер ${detail.concessionaire.name}${
-            detail.concessionaire.eik
-              ? ` (ЕИК ${detail.concessionaire.eik})`
-              : ""
-          }.`
-        : null,
+      // номерът е отпред: при еднакви факти описанието пак е уникално
+      `${headline}, партида ${regLabel(c.reg_num)}:`,
+      `${who}${detail.grantor ? `, концедент ${detail.grantor.name}` : ""}.`,
       c.term_months != null ? `Срок ${fmtMonths(c.term_months)}.` : null,
       c.annual_payment_eur != null
         ? `Годишно възнаграждение ${fmtEur(c.annual_payment_eur)}.`
         : null,
       c.status ? `Статус: ${c.status.toLowerCase()}.` : null,
       detail.flags.length
-        ? `${detail.flags.length} ${
-            detail.flags.length === 1 ? "индикатор" : "индикатора"
-          } за риск.`
+        ? `Индикатори: ${detail.flags
+            .map((f) => FLAG_SHORT[f.code] ?? f.code)
+            .join(", ")
+            .toLowerCase()}.`
         : null,
-      `Партида ${c.reg_num}, проследима до официалния регистър.`,
+      "Данни от Националния концесионен регистър.",
     ]),
   );
 }
@@ -95,9 +87,10 @@ function descriptionOf(detail: ConcessionDetail): string {
 export function meta({ loaderData }: Route.MetaArgs) {
   const detail =
     loaderData && "detail" in loaderData ? loaderData.detail : null;
-  if (!detail) return [{ title: pageTitle("Концесия") }];
-  const title = titleOf(detail);
-  const description = descriptionOf(detail);
+  if (!detail || !loaderData || !("titles" in loaderData))
+    return [{ title: pageTitle("Концесия") }];
+  const title = loaderData.titles.pageTitle;
+  const description = descriptionOf(detail, loaderData.titles.headline);
   const url = absUrl(concessionHref(detail.slug));
   return [
     { title: pageTitle(title) },
@@ -116,9 +109,21 @@ export function loader({ params }: Route.LoaderArgs) {
   // Суров номер или отрязан на "#" адрес → каноничният slug.
   if (hit.slug !== params.slug) throw redirect(concessionHref(hit.slug), 301);
   const detail = getConcession(hit.reg_num);
-  if (!detail) throw new Response("Not Found", { status: 404 });
+  const titles = concessionTitles(hit.reg_num);
+  if (!detail || !titles) throw new Response("Not Found", { status: 404 });
 
-  return { detail, related: relatedConcessions(hit.reg_num) };
+  const municipality = municipalityOf(hit.reg_num);
+  const byMunicipality = municipality
+    ? (getMunicipality(municipality.slug)?.concessions ?? [])
+        .filter((r) => r.reg_num !== hit.reg_num)
+        .slice(0, 6)
+    : [];
+  return {
+    detail,
+    titles,
+    municipality,
+    related: { ...relatedConcessions(hit.reg_num), byMunicipality },
+  };
 }
 
 /**
@@ -238,11 +243,125 @@ function fmtInputs(inputs: Record<string, unknown>): string {
     .join("  ·  ");
 }
 
-export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
-  const { detail, related } = loaderData;
+/**
+ * Въпросите, с които хората търсят една концесия, и отговорите от
+ * вписаните факти. Липсващ факт дава отговор „не е вписано" - това също
+ * е информация за регистъра, а не празно място за догадки.
+ */
+function Answers({
+  detail,
+  headline,
+  municipality,
+}: {
+  detail: ConcessionDetail;
+  headline: string;
+  municipality: { slug: string; name: string; oblast: string } | null;
+}) {
   const c = detail.concession;
-  const heading = titleOf(detail);
-  const description = descriptionOf(detail);
+  const who = detail.concessionaire;
+  const items: Array<[string, ReactNode]> = [
+    [
+      `Кой е концесионерът на ${headline}?`,
+      who ? (
+        <>
+          {who.eik ? (
+            <Link
+              to={companyHref(who.name, who.eik)}
+              className="font-semibold text-water underline underline-offset-2"
+            >
+              {who.name}
+            </Link>
+          ) : (
+            <b>{who.name}</b>
+          )}
+          {who.eik ? `, ЕИК ${who.eik}` : ""}.
+        </>
+      ) : (
+        "В регистъра не е вписан концесионер."
+      ),
+    ],
+    [
+      "Кой е отдал концесията?",
+      detail.grantor ? (
+        <>
+          Концедент е{" "}
+          <Link
+            to={grantorHref(detail.grantor.id.slice(3))}
+            className="font-semibold text-water underline underline-offset-2"
+          >
+            {detail.grantor.name}
+          </Link>
+          .
+        </>
+      ) : (
+        "Концедентът не е вписан."
+      ),
+    ],
+    [
+      "За колко години е концесията?",
+      c.term_months != null
+        ? `Срокът е ${fmtMonths(c.term_months)}${c.status ? `; статус в регистъра: ${c.status.toLowerCase()}` : ""}.`
+        : "Срокът не е вписан в регистъра.",
+    ],
+    [
+      "Колко плаща концесионерът?",
+      c.annual_payment_eur != null || c.onetime_payment_eur != null
+        ? [
+            c.annual_payment_eur != null
+              ? `Годишното възнаграждение е ${fmtEur(c.annual_payment_eur)}`
+              : null,
+            c.onetime_payment_eur != null
+              ? `еднократното е ${fmtEur(c.onetime_payment_eur)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(", ") + ", по данните в регистъра."
+        : "В регистъра не е вписано възнаграждение.",
+    ],
+  ];
+  if (municipality)
+    items.splice(1, 0, [
+      "В коя община е обектът?",
+      <>
+        В община{" "}
+        <Link
+          to={municipalityHref(municipality.slug)}
+          className="font-semibold text-water underline underline-offset-2"
+        >
+          {municipality.name}
+        </Link>
+        , област {municipality.oblast}.
+      </>,
+    ]);
+  if (detail.flags.length)
+    items.push([
+      "Има ли индикатори за риск?",
+      `Да: ${detail.flags
+        .map((f) => FLAG_SHORT[f.code] ?? f.code)
+        .join(", ")
+        .toLowerCase()}. Индикаторът е аритметичен факт по публичната методология, не обвинение.`,
+    ]);
+  return (
+    <section className="mt-6 border-t border-limestone pt-5">
+      <h2 className="font-display text-lg font-bold">Въпроси и отговори</h2>
+      <div className="mt-3 grid max-w-[72ch] gap-3.5">
+        {items.map(([q, a]) => (
+          <div key={q}>
+            <h3 className="font-bold">{q}</h3>
+            <p className="mt-0.5 text-ink/90">{a}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
+  const { detail, titles, related, municipality } = loaderData;
+  const c = detail.concession;
+  const heading = titles.headline;
+  const description = descriptionOf(detail, heading);
+  const place = detail.objects.find((o) => o.municipality || o.lat != null);
   // Регистровата стойност никога не изчезва: ако заглавието на страницата
   // се различава от нея (родово или отрязано), показваме я дословно.
   const rawSubject =
@@ -250,7 +369,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
   const objectKind = detail.objects[0]?.kind ?? null;
   const crumbs: Crumb[] = [
     { label: "Начало", to: "/" },
-    { label: "Концесии", to: "/concessions" },
+    { label: "Концесии", to: PATHS.concessions },
     ...(objectKind
       ? [
           {
@@ -280,21 +399,33 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
           breadcrumbJsonLd(crumbs),
           concessionJsonLd({
             url: absUrl(concessionHref(detail.slug)),
-            name: heading,
+            name: titles.pageTitle,
             description,
             regNum: c.reg_num,
+            place: place
+              ? {
+                  name: place.place ?? place.municipality ?? null,
+                  municipality: place.municipality,
+                  oblast: place.oblast,
+                  lat: place.lat,
+                  lon: place.lon,
+                }
+              : null,
             sourceUrl: c.source_url,
             fetchedAt: c.fetched_at,
             grantorName: detail.grantor?.name ?? null,
             grantorUrl: detail.grantor
-              ? absUrl(
-                  `/grantors/${encodeURIComponent(detail.grantor.id.slice(3))}`,
-                )
+              ? absUrl(grantorHref(detail.grantor.id.slice(3)))
               : null,
             concessionaireName: detail.concessionaire?.name ?? null,
             concessionaireEik: detail.concessionaire?.eik ?? null,
             concessionaireUrl: detail.concessionaire?.eik
-              ? absUrl(`/companies/${detail.concessionaire.eik}`)
+              ? absUrl(
+                  companyHref(
+                    detail.concessionaire.name,
+                    detail.concessionaire.eik,
+                  ),
+                )
               : null,
           }),
         ])}
@@ -313,8 +444,8 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             {c.status ? ` · ${c.status.toLowerCase()}` : ""}
           </div>
           <h1
-            className={`font-display font-bold leading-tight text-balance ${
-              heading.length > 140 ? "text-lg" : "text-2xl"
+            className={`font-sans font-bold leading-tight text-balance ${
+              heading.length > 140 ? "text-xl" : "text-[26px]"
             }`}
           >
             {heading}
@@ -323,7 +454,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             Концедент:{" "}
             {detail.grantor ? (
               <Link
-                to={`/grantors/${encodeURIComponent(detail.grantor.id.slice(3))}`}
+                to={grantorHref(detail.grantor.id.slice(3))}
                 className="font-semibold text-water underline decoration-1 underline-offset-2"
               >
                 {detail.grantor.name}
@@ -336,7 +467,10 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
               <>
                 {detail.concessionaire.eik ? (
                   <Link
-                    to={`/companies/${detail.concessionaire.eik}`}
+                    to={companyHref(
+                      detail.concessionaire.name,
+                      detail.concessionaire.eik,
+                    )}
                     className="font-semibold text-water underline decoration-1 underline-offset-2"
                   >
                     {detail.concessionaire.name}
@@ -355,6 +489,18 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
               "—"
             )}
           </div>
+          {municipality && (
+            <div className="mt-1 text-sm text-ink/85">
+              Община:{" "}
+              <Link
+                to={municipalityHref(municipality.slug)}
+                className="font-semibold text-water underline decoration-1 underline-offset-2"
+              >
+                {municipality.name}
+              </Link>
+              , област {municipality.oblast}
+            </div>
+          )}
         </div>
         <div className="col-span-2 flex flex-wrap gap-5 border-t border-limestone px-5 py-3.5 text-[13px] md:col-span-1 md:flex-col md:gap-2.5 md:border-t-0 md:border-l md:py-4">
           <div>
@@ -428,7 +574,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                       {FLAG_CONDITIONS[f.code] ?? "виж методологията"}.
                       Индикаторът е аритметичен факт, не твърдение за нарушение.{" "}
                       <Link
-                        to="/methodology"
+                        to={PATHS.methodology}
                         className="text-water underline underline-offset-2"
                       >
                         Методология →
@@ -548,7 +694,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             оригинала. Документът само попълва липсващо поле; при разминаване
             стойността от регистъра остава и полето се отбелязва.{" "}
             <Link
-              to="/methodology#izvlichane-ot-dokumentite"
+              to={`${PATHS.methodology}#izvlichane-ot-dokumentite`}
               className="text-water underline underline-offset-2"
             >
               Как се извлича →
@@ -573,7 +719,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                 <span className="mt-0.5 block text-xs text-stone">
                   {f.document_title ?? "документ"}, стр. {f.page} ·{" "}
                   <Link
-                    to={`${concessionHref(detail.slug)}/documents/${f.document_key}#str-${f.page}`}
+                    to={`${documentHref(detail.slug, f.document_key)}#str-${f.page}`}
                     className="text-water underline underline-offset-2"
                   >
                     текст
@@ -621,7 +767,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                         <>
                           {meta ? " · " : ""}
                           <Link
-                            to={`${concessionHref(detail.slug)}/documents/${d.key}`}
+                            to={documentHref(detail.slug, d.key)}
                             className="text-water underline underline-offset-2"
                           >
                             Текстът на документа →
@@ -639,15 +785,29 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         )}
       </Razdel>
 
-      {(related.byGrantor.length > 0 || related.byKind.length > 0) && (
-        <section className="mt-6 grid gap-8 border-t border-limestone pt-5 md:grid-cols-2">
+      <Answers detail={detail} headline={heading} municipality={municipality} />
+
+      {(related.byGrantor.length > 0 ||
+        related.byKind.length > 0 ||
+        related.byMunicipality.length > 0) && (
+        <section className="mt-6 grid gap-8 border-t border-limestone pt-5 md:grid-cols-2 lg:grid-cols-3">
+          {municipality && (
+            <RelatedList
+              title={`Други концесии в община ${municipality.name}`}
+              rows={related.byMunicipality}
+              more={{
+                label: `Всички концесии в община ${municipality.name} →`,
+                to: municipalityHref(municipality.slug),
+              }}
+            />
+          )}
           {detail.grantor && (
             <RelatedList
               title={`Други концесии на ${detail.grantor.name}`}
               rows={related.byGrantor}
               more={{
                 label: "Всички партиди на този концедент →",
-                to: `/grantors/${encodeURIComponent(detail.grantor.id.slice(3))}`,
+                to: grantorHref(detail.grantor.id.slice(3)),
               }}
             />
           )}

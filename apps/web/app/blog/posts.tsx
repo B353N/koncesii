@@ -8,6 +8,7 @@ import type {
   KindStats,
   TermBand,
 } from "../queries.server";
+import { flagHref, grantorHref, PATHS } from "../paths";
 
 /**
  * Анализите на КОНЦЕСИИ.
@@ -145,7 +146,7 @@ const missingData = {
         <p>
           Затова и най-честият индикатор на сайта не е за прекалено ниско
           плащане, а за липсващо:{" "}
-          <Link to="/flags?code=MISSING_MONEY">MISSING_MONEY</Link> се отнася за
+          <Link to={flagHref("MISSING_MONEY")}>MISSING_MONEY</Link> се отнася за
           партиди, в които не е вписано нито еднократно, нито годишно
           възнаграждение. Това не твърди, че плащане няма - твърди, че в
           регистъра го няма.
@@ -170,12 +171,13 @@ const missingData = {
           флаг за качество до всяко поле, а суровият текст от регистъра стои на
           страницата на партидата дословно - включително когато е „Няма въведени
           данни" или две противоречащи си числа.{" "}
-          <Link to="/methodology">Методологията</Link> описва всяко правило.
+          <Link to={PATHS.methodology}>Методологията</Link> описва всяко
+          правило.
         </p>
         <p>
           Пълнотата е измерима и ще се мени с всяко снемане.{" "}
-          <Link to="/changes">Страницата с промените</Link> показва кога и какво
-          се е променило.
+          <Link to={PATHS.changes}>Страницата с промените</Link> показва кога и
+          какво се е променило.
         </p>
       </>
     );
@@ -211,7 +213,7 @@ const dams = {
           rows={grantors.map((g) => ({
             label: g.name,
             value: g.n,
-            href: `/grantors/${encodeURIComponent(g.slug)}`,
+            href: grantorHref(g.slug),
           }))}
         />
       </Figure>
@@ -226,8 +228,8 @@ const dams = {
         Дългият срок сам по себе си не е нередност: язовирната стена изисква
         поддръжка, която не се изплаща за три години. Той обаче заключва
         условията, договорени в началото - затова{" "}
-        <Link to="/flags?code=LONG_TERM">LONG_TERM</Link> отбелязва партидите
-        над прага, а <Link to="/flags?code=NO_INDEXATION">NO_INDEXATION</Link> -
+        <Link to={flagHref("LONG_TERM")}>LONG_TERM</Link> отбелязва партидите
+        над прага, а <Link to={flagHref("NO_INDEXATION")}>NO_INDEXATION</Link> -
         тези, в които при дълъг срок липсва клауза за индексация.
       </p>
       <h2>Възнаграждения</h2>
@@ -279,8 +281,9 @@ const longTerms = {
         Прагът от 25 години не е измислен от нас: около него минава границата
         между концесия, която се изплаща в рамките на един инвестиционен цикъл,
         и такава, която обвързва следващия. Пълното правило и прагът са в{" "}
-        <Link to="/methodology">методологията</Link>, а всички засегнати партиди
-        - на <Link to="/flags?code=LONG_TERM">страницата с индикатори</Link>.
+        <Link to={PATHS.methodology}>методологията</Link>, а всички засегнати
+        партиди - на{" "}
+        <Link to={flagHref("LONG_TERM")}>страницата с индикатори</Link>.
       </p>
       <Figure caption="Десетте най-дълги срока в регистрите. Числата са както са вписани в източника.">
         <ConcessionsTable rows={longest as ConcessionRow[]} />
@@ -292,7 +295,7 @@ const longTerms = {
         обратно. Не ги поправяме; показваме ги заедно със суровия текст, от
         който са парснати, и с флаг за качеството. Ако регистърът бъде
         коригиран, следващото снемане ще го отрази и партидата ще се появи в{" "}
-        <Link to="/changes">промените</Link>.
+        <Link to={PATHS.changes}>промените</Link>.
       </p>
     </>
   ),
@@ -322,10 +325,8 @@ const beaches = {
         {grantors[0] && (
           <>
             , най-много от{" "}
-            <Link to={`/grantors/${encodeURIComponent(grantors[0].slug)}`}>
-              {grantors[0].name}
-            </Link>{" "}
-            (<N>{grantors[0].n}</N>)
+            <Link to={grantorHref(grantors[0].slug)}>{grantors[0].name}</Link> (
+            <N>{grantors[0].n}</N>)
           </>
         )}
         . Пълният списък е на{" "}

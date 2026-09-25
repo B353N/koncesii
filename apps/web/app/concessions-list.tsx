@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { ConcessionsTable, ExportLinks, PageTitle } from "./components";
 import { KIND_LABELS } from "./format";
 import type { ConcessionRow } from "./queries.server";
+import { kindHref as pathKindHref, PATHS } from "./paths";
 
 /** Списъкът на партидите: общ за /concessions и /concessions/vid/:kind. */
 
@@ -43,7 +44,7 @@ export function filtersQuery(
 
 /** Адресът на страницата по вид обект. */
 export function kindHref(kind: string): string {
-  return `/concessions/vid/${encodeURIComponent(kind)}`;
+  return pathKindHref(kind);
 }
 
 export function ConcessionsListView({
@@ -60,13 +61,13 @@ export function ConcessionsListView({
   total: number;
   page: number;
   filters: ListViewFilters;
-  /** "/concessions" или "/concessions/vid/<kind>" - носи пагинацията. */
+  /** "/koncesii" или "/koncesii/vid/<вид>" - носи пагинацията. */
   basePath: string;
   title: string;
   count?: React.ReactNode;
   intro?: React.ReactNode;
 }) {
-  const kindInPath = basePath !== "/concessions";
+  const kindInPath = basePath !== PATHS.concessions;
   const qs = filtersQuery(filters, { withKind: !kindInPath });
   const csvQs = filtersQuery(filters, { withKind: true });
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -96,7 +97,7 @@ export function ConcessionsListView({
         aria-label="По вид обект"
       >
         <FilterChip
-          to="/concessions"
+          to={PATHS.concessions}
           active={!filters.kind && !filters.flagged}
         >
           Всички
@@ -114,7 +115,9 @@ export function ConcessionsListView({
           С индикатор
         </FilterChip>
       </nav>
-      <ExportLinks csvHref={`/concessions.csv${csvQs ? "?" + csvQs : ""}`} />
+      <ExportLinks
+        csvHref={`${PATHS.concessionsCsv}${csvQs ? "?" + csvQs : ""}`}
+      />
       <ConcessionsTable rows={rows} />
       {pages > 1 && (
         <nav

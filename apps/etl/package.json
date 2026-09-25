@@ -7,6 +7,7 @@
     "typecheck": "tsc --noEmit",
     "ingest": "tsx src/ingest.ts",
     "extract": "tsx src/extract.ts",
+    "coverage": "tsx src/coverage.ts",
     "upload": "tsx src/upload.ts",
     "push": "tsx src/push.ts",
     "test": "vitest run"

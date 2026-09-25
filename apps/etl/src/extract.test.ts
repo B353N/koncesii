@@ -69,6 +69,13 @@ describe("разпознаване без инструменти", () => {
         ]),
       ),
     ).toBe("срок 25 години");
+    // формулярите в НКР идват и в UTF-16 без BOM
+    const noBom = Buffer.from(
+      '<?xml version="1.0" encoding="utf-16"?><a>Срок: 10 години</a>',
+      "utf16le",
+    );
+    expect(sniff(noBom.subarray(0, 64), ".xml")).toBe("markup");
+    expect(markupText(noBom)).toBe("Срок: 10 години");
   });
 
   test("страница без текст или със „счупен“ шрифт отива на OCR", () => {

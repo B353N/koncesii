@@ -355,14 +355,12 @@ export function sniff(head: Buffer, ext: string): Sniffed {
     return "image";
   }
   // XML (напр. електронни формуляри, .onkr) и HTML — текстът е между таговете;
-  // Windows често ги записва в UTF-16 с BOM
-  if (
-    (head[0] === 0xff && head[1] === 0xfe) ||
-    (head[0] === 0xfe && head[1] === 0xff)
-  ) {
-    const le = head[0] === 0xff;
-    const decoded = new TextDecoder(le ? "utf-16le" : "utf-16be")
-      .decode(head.subarray(2, head.length - (head.length % 2)))
+  // Windows често ги записва в UTF-16, със или без BOM
+  const utf16 = utf16Order(head);
+  if (utf16) {
+    const skip = head[0] === 0x3c || head[1] === 0x3c ? 0 : 2; // без BOM
+    const decoded = new TextDecoder(utf16)
+      .decode(head.subarray(skip, head.length - ((head.length - skip) % 2)))
       .trimStart()
       .toLowerCase();
     if (/^<(\?xml|!doctype|html)/.test(decoded)) return "markup";
@@ -610,18 +608,29 @@ const ENTITIES: Record<string, string> = {
   nbsp: " ",
 };
 
+/**
+ * UTF-16 по BOM или, без BOM, по нулевия байт до „<" в началото —
+ * електронните формуляри в НКР идват и така.
+ */
+function utf16Order(head: Buffer): "utf-16le" | "utf-16be" | null {
+  if (head[0] === 0xff && head[1] === 0xfe) return "utf-16le";
+  if (head[0] === 0xfe && head[1] === 0xff) return "utf-16be";
+  if (head[0] === 0x3c && head[1] === 0x00) return "utf-16le";
+  if (head[0] === 0x00 && head[1] === 0x3c) return "utf-16be";
+  return null;
+}
+
 /** XML/HTML → текст: таговете стават нови редове, същностите се декодират. */
 export function markupText(buf: Buffer): string {
   const head = buf.subarray(0, 200).toString("latin1");
   const enc = /encoding\s*=\s*["']([\w-]+)["']/i.exec(head)?.[1]?.toLowerCase();
   let text: string;
-  if (buf[0] === 0xff && buf[1] === 0xfe) {
-    text = new TextDecoder("utf-16le").decode(buf.subarray(2));
-  } else if (buf[0] === 0xfe && buf[1] === 0xff) {
-    text = new TextDecoder("utf-16be").decode(buf.subarray(2));
+  const utf16 = utf16Order(buf);
+  if (utf16) {
+    // TextDecoder маха BOM-а сам
+    text = new TextDecoder(utf16).decode(buf);
   } else {
     try {
-      // декларацията „UTF-16" без BOM е рядка — тогава UTF-8
       text = new TextDecoder(
         enc && enc !== "utf-8" && !enc.startsWith("utf-16") ? enc : "utf-8",
       ).decode(buf);

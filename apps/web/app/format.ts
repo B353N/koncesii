@@ -274,3 +274,53 @@ export const FLAG_SHORT: Record<string, string> = {
   MISSING_MONEY: "Без вписана сума",
   DATA_CONFLICT: "Противоречие в данните",
 };
+
+// ── ЕГН на физически лица: не се публикува (docs/core-scope.md) ──────────
+
+/** Как се показва скрит ЕГН - както в публичните регистри. */
+export const EGN_MASK = "**********";
+
+const EGN_WEIGHTS = [2, 4, 8, 5, 10, 9, 7, 3, 6];
+
+/**
+ * 10 цифри с валидна дата на раждане и контролна цифра. Отделя ЕГН от
+ * произволни 10-цифрени номера и в текст, където OCR е изкривил етикета
+ * („ErH", „ETH", „ЕГИ").
+ */
+export function isEgn(digits: string): boolean {
+  if (!/^\d{10}$/.test(digits)) return false;
+  const d = [...digits].map(Number);
+  // към месеца се добавя 40 за родените след 2000 г. и 20 преди 1900 г.
+  const raw = d[2]! * 10 + d[3]!;
+  const month = raw > 40 ? raw - 40 : raw > 20 ? raw - 20 : raw;
+  const day = d[4]! * 10 + d[5]!;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const sum = EGN_WEIGHTS.reduce((s, w, i) => s + w * d[i]!, 0) % 11;
+  return (sum === 10 ? 0 : sum) === d[9];
+}
+
+/**
+ * Скрива ЕГН в свободен текст: всяко самостоятелно 10-цифрено число, което
+ * е валиден ЕГН или стои веднага след етикет „ЕГН". Останалият текст не се
+ * пипа; оригиналният документ остава достъпен по линка към регистъра.
+ */
+export function maskEgn(text: string): string {
+  return text.replace(/(?<!\d)\d{10}(?!\d)/g, (digits, offset: number) =>
+    isEgn(digits) ||
+    /ЕГН[\s:№.\u0001-]*$/iu.test(text.slice(Math.max(0, offset - 8), offset))
+      ? EGN_MASK
+      : digits,
+  );
+}
+
+/**
+ * Името на концесионер без ЕГН: „Йордан Костадинов Димитров с ЕГН
+ * 4809091440" → „Йордан Костадинов Димитров". Работи и върху
+ * идентификатора (`name:йордан-...-с-егн-4809091440`), който носи името.
+ */
+export function withoutEgn(name: string): string {
+  const out = name
+    .replace(/(?:[,\s-]+с)?[,\s-]*ЕГН[\s:№-]*\d{10}(?!\d)/giu, "")
+    .trim();
+  return maskEgn(out || name);
+}

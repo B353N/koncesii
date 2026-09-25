@@ -5,8 +5,10 @@ import {
   CONCESSION_KIND_LABELS,
   FACT_ORDER,
   KIND_LABELS,
+  maskEgn,
   SEVERITY_RANK,
   shortObjectTitle,
+  withoutEgn,
 } from "./format";
 import { buildUrlIndex, type UrlIndex } from "./slug";
 import {
@@ -169,20 +171,34 @@ export function concessionTitles(
 /**
  * Адресът и краткото заглавие на всеки ред: връзките в списъците носят
  * същия текст като h1 на партидата (сигнал за търсачките и четим за
- * хората); регистровото заглавие остава в `title`.
+ * хората); регистровото заглавие остава в `title`. Маха и ЕГН от името на
+ * концесионера - всички списъчни редове минават оттук.
  */
-function withSlugs<T extends { reg_num: string }>(
+function withSlugs<
+  T extends { reg_num: string; concessionaire_name?: string | null },
+>(
   db: Database.Database,
   rows: T[],
 ): Array<T & { slug: string; headline: string }> {
   const ci = concessionIndex(db);
   return rows.map((r) => ({
     ...r,
+    ...(r.concessionaire_name != null
+      ? { concessionaire_name: withoutEgn(r.concessionaire_name) }
+      : {}),
     slug: ci.urls.slugOf(r.reg_num),
     headline:
       ci.headline.get(r.reg_num) ??
       ("title" in r && typeof r.title === "string" ? r.title : r.reg_num),
   }));
+}
+
+/**
+ * Заявка, която съдържа ЕГН, не търси: иначе резултатът би показал къде
+ * се среща даден ЕГН, дори самият номер да е скрит.
+ */
+function asksForEgn(q: string): boolean {
+  return maskEgn(q) !== q;
 }
 
 /** Slug за суров партиден номер. */
@@ -338,6 +354,7 @@ export function listConcessions(f: ListFilters): {
   if (f.flagged) {
     where.push("EXISTS (SELECT 1 FROM flags f WHERE f.concession_id = c.id)");
   }
+  if (f.q && asksForEgn(f.q)) return { rows: [], total: 0 };
   if (f.q) {
     where.push(
       "(c.title LIKE @q OR c.reg_num LIKE @q OR co.name LIKE @q OR g.name LIKE @q OR co.eik = @qexact)",
@@ -458,11 +475,22 @@ export function getConcession(regNum: string): ConcessionDetail | null {
         .get(concession.concessionaire_id) ?? null)
     : null;
 
+  // идентификаторът name:... съдържа името, т.е. и ЕГН-а в него; стига до
+  // /json и до данните за хидратация в HTML-а
   return {
-    concession,
+    concession: {
+      ...concession,
+      concessionaire_id:
+        concession.concessionaire_id &&
+        withoutEgn(concession.concessionaire_id),
+    },
     slug: slugIndex(db).slugOf(regNum),
     grantor,
-    concessionaire,
+    concessionaire: concessionaire && {
+      ...concessionaire,
+      id: withoutEgn(concessionaire.id),
+      name: withoutEgn(concessionaire.name),
+    },
     objects: db
       .prepare<[string], ObjectRow>(
         `SELECT id, description, kind, kind_raw, oblast, municipality, place,
@@ -543,13 +571,12 @@ export function getGrantor(param: string) {
 export function getCompanyName(eik: string): string | null {
   const db = getDb();
   if (!db) return null;
-  return (
-    db
-      .prepare<[string], { name: string }>(
-        "SELECT name FROM concessionaires WHERE eik = ?",
-      )
-      .get(eik)?.name ?? null
-  );
+  const name = db
+    .prepare<[string], { name: string }>(
+      "SELECT name FROM concessionaires WHERE eik = ?",
+    )
+    .get(eik)?.name;
+  return name == null ? null : withoutEgn(name);
 }
 
 export interface CompanyRow {
@@ -563,15 +590,18 @@ export interface CompanyRow {
 export function listCompanies(): CompanyRow[] {
   const db = getDb();
   if (!db) return [];
+  // idkey е само React ключ, но стига до HTML-а - затова rowid, а не
+  // co.id, който за физическите лица съдържа ЕГН
   return db
     .prepare<[], CompanyRow>(
-      `SELECT co.eik, co.name, co.id AS idkey,
+      `SELECT co.eik, co.name, CAST(co.rowid AS TEXT) AS idkey,
               COUNT(c.id) AS concessions,
               SUM(c.annual_payment_eur) AS total_annual_eur
        FROM concessionaires co LEFT JOIN concessions c ON c.concessionaire_id = co.id
        GROUP BY co.id ORDER BY concessions DESC, co.name`,
     )
-    .all();
+    .all()
+    .map((r) => ({ ...r, name: withoutEgn(r.name) }));
 }
 
 /**
@@ -640,6 +670,7 @@ export function getCompany(eik: string) {
     >("SELECT id, name, eik, address FROM concessionaires WHERE eik = ?")
     .get(eik);
   if (!company) return null;
+  company.name = withoutEgn(company.name);
   const concessions = withSlugs(
     db,
     db
@@ -986,7 +1017,12 @@ function factRows(
     return i === -1 ? FACT_ORDER.length : i;
   };
   return rows
-    .map((r) => ({ ...r, document_key: documentKey(r.document_url) }))
+    .map((r) => ({
+      ...r,
+      value_raw: maskEgn(r.value_raw),
+      quote: maskEgn(r.quote),
+      document_key: documentKey(r.document_url),
+    }))
     .sort((a, b) => order(a.field) - order(b.field));
 }
 
@@ -1024,7 +1060,8 @@ export function getDocumentText(
           .prepare<[number], { page: number; method: string; text: string }>(
             "SELECT page, method, text FROM document_pages WHERE document_id = ? ORDER BY page",
           )
-          .all(docId);
+          .all(docId)
+          .map((p) => ({ ...p, text: maskEgn(p.text) }));
   return {
     concession: {
       reg_num: c.reg_num,
@@ -1120,7 +1157,8 @@ export function searchDocuments(
 ): { hits: DocumentHit[]; total: number } {
   const db = getDb();
   const match = ftsQuery(q);
-  if (!db || !match || !hasDocumentText(db)) return { hits: [], total: 0 };
+  if (!db || !match || !hasDocumentText(db) || asksForEgn(q))
+    return { hits: [], total: 0 };
   try {
     const total =
       db
@@ -1145,6 +1183,7 @@ export function searchDocuments(
     return {
       hits: withSlugs(db, rows).map((r) => ({
         ...r,
+        snippet: maskEgn(r.snippet),
         document_key: documentKey(r.document_url),
       })),
       total,
@@ -1233,6 +1272,7 @@ export function mapPoints(): MapPoint[] {
   const points = withSlugs(db, rows).map(
     ({ title, flag_codes, severities, ...r }) => ({
       ...r,
+      company: r.company && withoutEgn(r.company),
       label: shortObjectTitle(title),
       flags: flag_codes ? flag_codes.split(",") : [],
       sev: Math.max(

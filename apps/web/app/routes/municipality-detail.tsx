@@ -10,7 +10,7 @@ import {
   municipalityHref,
   PATHS,
 } from "../paths";
-import { isPlaceholderName, withoutEgn } from "../municipality";
+import { isPlaceholderName } from "../municipality";
 import { getMunicipality, type ConcessionRow } from "../queries.server";
 import {
   absUrl,
@@ -62,7 +62,8 @@ function stats(rows: ConcessionRow[]) {
   >();
   for (const r of rows)
     if (r.concessionaire_name && !isPlaceholderName(r.concessionaire_name)) {
-      const name = withoutEgn(r.concessionaire_name);
+      // без ЕГН още от заявката (queries.server.ts)
+      const name = r.concessionaire_name;
       const key = r.eik ?? name;
       const c = companies.get(key) ?? {
         name,

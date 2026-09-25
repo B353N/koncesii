@@ -265,6 +265,34 @@ CREATE TABLE extracted_facts (
 );
 CREATE INDEX idx_extracted_facts_concession ON extracted_facts (concession_id, field, rank);
 
+-- Т. 4.9 от отчетите за изпълнение на концесионния договор (формулярът на
+-- НКР по чл. 132 ЗК): дължимото за отчетната година и какво е отметнато за
+-- изпълнението му. fulfillment/on_time са NULL, когато отметката не е
+-- еднозначна (OCR шум, две отметки); paid_* - само изрично написана сума
+-- (при „частично"), „пълно изпълнение" не се превръща в число.
+CREATE TABLE reported_payments (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  concession_id TEXT NOT NULL REFERENCES concessions (id),
+  document_id   INTEGER NOT NULL REFERENCES documents (id),
+  year          INTEGER,                -- отчетната година от заглавието
+  due_raw       TEXT,                   -- дословно: „29 146,52 лв. без ДДС"
+  due_amount    REAL,                   -- в оригиналната валута
+  due_currency  TEXT CHECK (due_currency IN ('BGN', 'EUR')),
+  due_eur       REAL,
+  fulfillment   TEXT CHECK (fulfillment IN ('full', 'partial', 'none')),
+  paid_raw      TEXT,
+  paid_eur      REAL,
+  on_time       INTEGER CHECK (on_time IN (0, 1)),
+  arrears_raw   TEXT,                   -- „дължими суми от предходни години"
+  arrears_eur   REAL,
+  quote         TEXT NOT NULL,
+  page          INTEGER NOT NULL,
+  document_url  TEXT NOT NULL,
+  method        TEXT NOT NULL DEFAULT 'regex' CHECK (method IN ('regex', 'human_confirmed')),
+  extracted_at  TEXT NOT NULL
+);
+CREATE INDEX idx_reported_payments_concession ON reported_payments (concession_id, year);
+
 -- Всяка парична сума в текста на документите, с контекст — „всички
 -- цифри" за търсене и сравнения; не влиза във формулите.
 CREATE TABLE document_amounts (

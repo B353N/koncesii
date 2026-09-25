@@ -98,11 +98,11 @@ Ingest-ът е **детерминистичен**: същият снапшот �
 договори — затова документите минават през три стъпки (подробно:
 [`document-extraction.md`](document-extraction.md)):
 
-| Стъпка                       | Изход в снапшота                                                                                      |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `nkr_scraper.py files`       | `nkr_data/files/{партида}/{файл}` — байт-точни; `nkr_data/files.jsonl` — URL, заглавие, тип, sha256   |
-| `pnpm extract --local <dir>` | `nkr_data/text/{партида}/{файл}.txt` (страници, разделени с form feed) + `.meta.json` (метод, версии) |
-| `pnpm ingest` (автоматично)  | `documents`, `document_pages` + FTS5, `extracted_facts`, `document_amounts`; попълва липсващи полета  |
+| Стъпка                       | Изход в снапшота                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `nkr_scraper.py files`       | `nkr_data/files/{партида}/{файл}` - байт-точни; `nkr_data/files.jsonl` - URL, заглавие, тип, sha256                       |
+| `pnpm extract --local <dir>` | `nkr_data/text/{партида}/{файл}.txt` (страници, разделени с form feed) + `.meta.json` (метод, версии)                     |
+| `pnpm ingest` (автоматично)  | `documents`, `document_pages` + FTS5, `extracted_facts`, `document_amounts`, `reported_payments`; попълва липсващи полета |
 
 `pnpm extract` иска poppler (`pdftotext`, `pdftoppm`), за сканираните страници — `tesseract`
 с български език, за Word/RTF - LibreOffice (`soffice`), за архивите - `unar` (`brew install unar`; чете стари и „solid“ RAR и сам декодира кирилските

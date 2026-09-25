@@ -749,7 +749,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             дословно. Когато отметката не се чете еднозначно (например при
             сканиран отчет), тя не се тълкува.{" "}
             <Link
-              to="/methodology#izvlichane-ot-dokumentite"
+              to={`${PATHS.methodology}#izvlichane-ot-dokumentite`}
               className="text-water underline underline-offset-2"
             >
               Как се извлича →
@@ -806,7 +806,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                 </details>
                 <span className="mt-0.5 block text-xs text-stone">
                   <Link
-                    to={`${concessionHref(detail.slug)}/documents/${r.document_key}#str-${r.page}`}
+                    to={`${documentHref(detail.slug, r.document_key)}#str-${r.page}`}
                     className="text-water underline underline-offset-2"
                   >
                     текст

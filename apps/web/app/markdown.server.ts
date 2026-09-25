@@ -214,7 +214,7 @@ function mdConcessionDetail(param: string): string | null {
           `- ${r.year ?? "година не е посочена"}: дължимо ${
             r.due_eur != null
               ? `${fmtEur(r.due_eur)} (${r.due_raw})`
-              : (r.due_raw ?? "—")
+              : (r.due_raw ?? "-")
           }; ${r.fulfillment ? FULFILLMENT_LABELS[r.fulfillment] : "отметката не е еднозначна"}${
             r.paid_raw ? `, платени ${r.paid_raw}` : ""
           }${r.on_time != null ? (r.on_time ? ", в срок" : ", не в срок") : ""}${

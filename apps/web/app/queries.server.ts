@@ -820,7 +820,7 @@ export function hasDocumentText(db: Database.Database): boolean {
   return ok;
 }
 
-/** Стара база без таблицата не бива да чупи сайта — секцията просто липсва. */
+/** Стара база без таблицата не бива да чупи сайта - секцията просто липсва. */
 const reportedPaymentsSupport = new WeakMap<Database.Database, boolean>();
 function reportedPaymentRows(
   db: Database.Database,

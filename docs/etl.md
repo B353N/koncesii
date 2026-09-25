@@ -100,7 +100,7 @@ Ingest-ът е **детерминистичен**: същият снапшот �
 
 | Стъпка                       | Изход в снапшота                                                                                                          |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `nkr_scraper.py files`       | `nkr_data/files/{партида}/{файл}` — байт-точни; `nkr_data/files.jsonl` — URL, заглавие, тип, sha256                       |
+| `nkr_scraper.py files`       | `nkr_data/files/{партида}/{файл}` - байт-точни; `nkr_data/files.jsonl` - URL, заглавие, тип, sha256                       |
 | `pnpm extract --local <dir>` | `nkr_data/text/{партида}/{файл}.txt` (страници, разделени с form feed) + `.meta.json` (метод, версии)                     |
 | `pnpm ingest` (автоматично)  | `documents`, `document_pages` + FTS5, `extracted_facts`, `document_amounts`, `reported_payments`; попълва липсващи полета |
 

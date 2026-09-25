@@ -156,7 +156,7 @@ export function ingestDocuments(
        @due_currency, @due_eur, @fulfillment, @paid_raw, @paid_eur, @on_time,
        @arrears_raw, @arrears_eur, @quote, @page, @document_url, @extracted_at)`,
   );
-  // Един и същ отчет често е качен няколко пъти — същата година със същите
+  // Един и същ отчет често е качен няколко пъти - същата година със същите
   // стойности се записва веднъж (първият документ). Различните остават.
   const seenReports = new Set<string>();
   const insAmount = db.prepare(

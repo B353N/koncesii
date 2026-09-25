@@ -598,7 +598,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
         <Razdel num="IX·О" title="Отчети за изпълнение">
           <p className="max-w-[70ch] pb-2 text-[13px] text-stone">
             Всяка година концедентът подава в НКР информация за изпълнението на
-            договора. Тук е т. 4.9 от тези отчети — дължимото концесионно
+            договора. Тук е т. 4.9 от тези отчети - дължимото концесионно
             възнаграждение за годината и какво е отметнато за плащането му,
             дословно. Когато отметката не се чете еднозначно (например при
             сканиран отчет), тя не се тълкува.{" "}
@@ -623,7 +623,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                 <span className="block">
                   Дължимо:{" "}
                   <b className="font-mono font-medium tabular-nums">
-                    {r.due_eur != null ? fmtEur(r.due_eur) : (r.due_raw ?? "—")}
+                    {r.due_eur != null ? fmtEur(r.due_eur) : (r.due_raw ?? "-")}
                   </b>
                   {r.due_eur != null && r.due_raw && (
                     <span className="text-xs text-stone"> ({r.due_raw})</span>
@@ -637,7 +637,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                   {r.paid_raw && (
                     <>
                       {" "}
-                      — платени <span className="font-mono">{r.paid_raw}</span>
+                      - платени <span className="font-mono">{r.paid_raw}</span>
                     </>
                   )}
                   {r.on_time != null && (

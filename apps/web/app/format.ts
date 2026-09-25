@@ -178,7 +178,7 @@ export const FACT_OUTCOMES: Record<string, string> = {
   alternative: "друг кандидат",
 };
 
-/** Отметката в отчета за изпълнение — дословно, без оценка. */
+/** Отметката в отчета за изпълнение - дословно, без оценка. */
 export const FULFILLMENT_LABELS: Record<string, string> = {
   full: "пълно изпълнение",
   partial: "частично изпълнение",

@@ -266,7 +266,7 @@ CREATE INDEX idx_extracted_facts_concession ON extracted_facts (concession_id, f
 -- Т. 4.9 от отчетите за изпълнение на концесионния договор (формулярът на
 -- НКР по чл. 132 ЗК): дължимото за отчетната година и какво е отметнато за
 -- изпълнението му. fulfillment/on_time са NULL, когато отметката не е
--- еднозначна (OCR шум, две отметки); paid_* — само изрично написана сума
+-- еднозначна (OCR шум, две отметки); paid_* - само изрично написана сума
 -- (при „частично"), „пълно изпълнение" не се превръща в число.
 CREATE TABLE reported_payments (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,

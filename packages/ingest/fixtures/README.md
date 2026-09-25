@@ -7,7 +7,8 @@
 Документите по партидата (фаза E2/E3, docs/document-extraction.md):
 `contract.pdf` — договор с текстов слой (2 страници), `contract_scan.pdf` —
 втората му страница като растерен скан без текстов слой (за OCR),
-`contract.docx` — същият текст като Word, `contract.txt` — кешираният
+`contract.docx` — същият текст като Word, `contract.rar` — `contract.pdf`
+(като `dogovor.pdf`) в RAR4 архив без компресия, `contract.txt` — кешираният
 текст на `contract.pdf` във формата на `pnpm extract` (страници, разделени с
 form feed). Сглобени с LibreOffice/poppler от примерен текст.
 

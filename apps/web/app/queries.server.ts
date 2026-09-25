@@ -1,8 +1,20 @@
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getDb } from "./db.server";
-import { FACT_ORDER, SEVERITY_RANK, shortObjectTitle } from "./format";
-import { buildSlugIndex, type SlugIndex } from "./slug";
+import {
+  CONCESSION_KIND_LABELS,
+  FACT_ORDER,
+  KIND_LABELS,
+  SEVERITY_RANK,
+  shortObjectTitle,
+} from "./format";
+import { buildUrlIndex, type UrlIndex } from "./slug";
+import {
+  concessionHeadline,
+  concessionPageTitle,
+  concessionUrlText,
+} from "./seo";
+import { grantorSlug } from "./paths";
 
 /**
  * Всички заявки на сайта. Строго read-only, само bound параметри —
@@ -19,8 +31,10 @@ export interface Summary {
 
 export interface ConcessionRow {
   reg_num: string;
-  /** URL slug на партидата (виж slug.ts); адресът е /concessions/<slug>. */
+  /** URL slug на партидата (виж slug.ts); адресът е /koncesii/<slug>. */
   slug: string;
+  /** Краткото заглавие (h1 на партидата) - текстът на връзките. */
+  headline: string;
   title: string;
   status: string | null;
   grantor_name: string | null;
@@ -60,31 +74,108 @@ const LIST_SQL = `SELECT ${LIST_COLS} ${LIST_FROM}`;
 type ListRow = Omit<ConcessionRow, "slug">;
 
 /**
- * Индексът номер ↔ slug се строи веднъж за отворената база (WeakMap по
- * handle: при атомарна подмяна на файла getDb() връща нов handle и
- * индексът се престроява).
+ * Индексът номер ↔ адрес и заглавията на партидите се строят веднъж за
+ * отворената база (WeakMap по handle: при атомарна подмяна на файла
+ * getDb() връща нов handle и индексът се престроява). Адресът е
+ * описание + номер (slug.ts); заглавието е обектът и общината (seo.ts).
  */
-const slugIndexes = new WeakMap<Database.Database, SlugIndex>();
-function slugIndex(db: Database.Database): SlugIndex {
-  let idx = slugIndexes.get(db);
-  if (!idx) {
-    idx = buildSlugIndex(
-      db
-        .prepare<[], { reg_num: string }>("SELECT reg_num FROM concessions")
-        .all()
-        .map((r) => r.reg_num),
-    );
-    slugIndexes.set(db, idx);
-  }
-  return idx;
+interface ConcessionIndex {
+  urls: UrlIndex;
+  headline: Map<string, string>;
+  /** заглавия, които се падат на повече от една партида */
+  duplicate: Set<string>;
+}
+const concessionIndexes = new WeakMap<Database.Database, ConcessionIndex>();
+function concessionIndex(db: Database.Database): ConcessionIndex {
+  let ci = concessionIndexes.get(db);
+  if (ci) return ci;
+  const rows = db
+    .prepare<
+      [],
+      {
+        reg_num: string;
+        title: string | null;
+        ckind: string | null;
+        grantor: string | null;
+        kind: string | null;
+        description: string | null;
+        municipality: string | null;
+      }
+    >(
+      `SELECT c.reg_num, c.title, c.kind AS ckind, g.name AS grantor,
+              (SELECT o.kind FROM objects o WHERE o.concession_id = c.id
+                ORDER BY o.seq LIMIT 1) AS kind,
+              (SELECT o.description FROM objects o WHERE o.concession_id = c.id
+                ORDER BY o.seq LIMIT 1) AS description,
+              (SELECT o.municipality FROM objects o WHERE o.concession_id = c.id
+                AND o.municipality IS NOT NULL ORDER BY o.seq LIMIT 1) AS municipality
+         FROM concessions c LEFT JOIN grantors g ON g.id = c.grantor_id`,
+    )
+    .all();
+  const headline = new Map<string, string>();
+  const seen = new Set<string>();
+  const duplicate = new Set<string>();
+  const texts = rows.map((r) => {
+    const parts = {
+      title: r.title,
+      kindLabel: r.kind ? (KIND_LABELS[r.kind] ?? null) : null,
+      concessionKindLabel: r.ckind
+        ? (CONCESSION_KIND_LABELS[r.ckind] ?? null)
+        : null,
+      objectDescription: r.description,
+      grantorName: r.grantor,
+      municipality: r.municipality,
+    };
+    const h = concessionHeadline(parts);
+    headline.set(r.reg_num, h);
+    if (seen.has(h)) duplicate.add(h);
+    seen.add(h);
+    return { reg_num: r.reg_num, text: concessionUrlText(parts) };
+  });
+  ci = { urls: buildUrlIndex(texts), headline, duplicate };
+  concessionIndexes.set(db, ci);
+  return ci;
+}
+function slugIndex(db: Database.Database): UrlIndex {
+  return concessionIndex(db).urls;
 }
 
+/** H1 и <title> на партида (seo.ts), с номера само при дубликат. */
+export function concessionTitles(
+  regNum: string,
+): { headline: string; pageTitle: string } | null {
+  const db = getDb();
+  if (!db) return null;
+  const ci = concessionIndex(db);
+  const headline = ci.headline.get(regNum);
+  if (!headline) return null;
+  return {
+    headline,
+    pageTitle: concessionPageTitle(
+      headline,
+      regNum,
+      ci.duplicate.has(headline),
+    ),
+  };
+}
+
+/**
+ * Адресът и краткото заглавие на всеки ред: връзките в списъците носят
+ * същия текст като h1 на партидата (сигнал за търсачките и четим за
+ * хората); регистровото заглавие остава в `title`.
+ */
 function withSlugs<T extends { reg_num: string }>(
   db: Database.Database,
   rows: T[],
-): Array<T & { slug: string }> {
-  const idx = slugIndex(db);
-  return rows.map((r) => ({ ...r, slug: idx.slugOf(r.reg_num) }));
+): Array<T & { slug: string; headline: string }> {
+  const ci = concessionIndex(db);
+  return rows.map((r) => ({
+    ...r,
+    slug: ci.urls.slugOf(r.reg_num),
+    headline:
+      ci.headline.get(r.reg_num) ??
+      ("title" in r && typeof r.title === "string" ? r.title : r.reg_num),
+  }));
 }
 
 /** Slug за суров партиден номер. */
@@ -100,9 +191,11 @@ export function allConcessionSlugs(): string[] {
 }
 
 /**
- * Разпознава сегмента от /concessions/<x>: каноничен slug, суров партиден
- * номер (стар адрес → 301) или номер, отрязан на "#" от търсачка, ако е
- * еднозначен. Връща null, ако няма такава партида.
+ * Разпознава сегмента от /koncesii/<x> (и от старите /concessions/<x>):
+ * каноничен адрес, остаряла описателна част, стар slug само от номера,
+ * суров партиден номер или номер, отрязан на "#" от търсачка, ако е
+ * еднозначен. `slug` е каноничният адрес - ако се различава от сегмента,
+ * страницата прави 301. Връща null, ако няма такава партида.
  */
 export function resolveConcession(
   param: string,
@@ -110,8 +203,8 @@ export function resolveConcession(
   const db = getDb();
   if (!db) return null;
   const idx = slugIndex(db);
-  const bySlug = idx.regNumOf(param);
-  if (bySlug) return { reg_num: bySlug, slug: param };
+  const hit = idx.resolve(param);
+  if (hit) return { reg_num: hit.regNum, slug: idx.slugOf(hit.regNum) };
   const exists = db
     .prepare<[string], { reg_num: string }>(
       "SELECT reg_num FROM concessions WHERE reg_num = ?",
@@ -303,6 +396,13 @@ export interface ObjectRow {
   description: string;
   kind: string;
   kind_raw: string | null;
+  oblast: string | null;
+  municipality: string | null;
+  place: string | null;
+  lat: number | null;
+  lon: number | null;
+  /** 'settlement' | 'municipality' - точката е центроид, приблизителна */
+  geo_precision: string | null;
 }
 
 export interface PaymentRow {
@@ -313,7 +413,7 @@ export interface PaymentRow {
 
 export interface ConcessionDetail {
   concession: ConcessionFull;
-  /** URL slug на партидата; адресът е /concessions/<slug>. */
+  /** URL slug на партидата; адресът е /koncesii/<slug>. */
   slug: string;
   grantor: { id: string; name: string } | null;
   concessionaire: { id: string; name: string; eik: string | null } | null;
@@ -358,7 +458,9 @@ export function getConcession(regNum: string): ConcessionDetail | null {
     concessionaire,
     objects: db
       .prepare<[string], ObjectRow>(
-        "SELECT id, description, kind, kind_raw FROM objects WHERE concession_id = ? ORDER BY seq",
+        `SELECT id, description, kind, kind_raw, oblast, municipality, place,
+                lat, lon, geo_precision
+           FROM objects WHERE concession_id = ? ORDER BY seq`,
       )
       .all(id),
     documents: documentRows(db, id),
@@ -398,17 +500,49 @@ export function listGrantors(): GrantorRow[] {
     .all();
 }
 
-export function getGrantor(slug: string) {
+const grantorByLatin = new WeakMap<Database.Database, Map<string, string>>();
+/**
+ * Концедентът зад сегмента от адреса: латинският slug или старият на
+ * кирилица. `slug` е каноничният латински - при разлика страницата прави 301.
+ */
+export function getGrantor(param: string) {
   const db = getDb();
   if (!db) return null;
+  let byLatin = grantorByLatin.get(db);
+  if (!byLatin) {
+    byLatin = new Map(
+      db
+        .prepare<[], { id: string }>("SELECT id FROM grantors")
+        .all()
+        .map((g) => [grantorSlug(g.id.slice(3)), g.id] as const),
+    );
+    grantorByLatin.set(db, byLatin);
+  }
+  const id = byLatin.get(param) ?? `gr:${param}`;
   const grantor = db
     .prepare<[string], { id: string; name: string; kind: string }>(
       "SELECT id, name, kind FROM grantors WHERE id = ?",
     )
-    .get(`gr:${slug}`);
+    .get(id);
   if (!grantor) return null;
-  const { rows } = listConcessions({ grantor: slug, limit: 500 });
-  return { grantor, concessions: rows };
+  const { rows } = listConcessions({
+    grantor: grantor.id.slice(3),
+    limit: 500,
+  });
+  return { grantor, slug: grantorSlug(grantor.id.slice(3)), concessions: rows };
+}
+
+/** Името на компания по ЕИК - за адреса ѝ (paths.companyHref). */
+export function getCompanyName(eik: string): string | null {
+  const db = getDb();
+  if (!db) return null;
+  return (
+    db
+      .prepare<[string], { name: string }>(
+        "SELECT name FROM concessionaires WHERE eik = ?",
+      )
+      .get(eik)?.name ?? null
+  );
 }
 
 export interface CompanyRow {
@@ -735,7 +869,7 @@ export function lowestPaymentRatio(
 // ── Документите по партидата: текст, клаузи, търсене (E4) ────────────────
 
 export interface DocumentRow {
-  /** Стабилен ключ за адреса /concessions/<slug>/documents/<key>. */
+  /** Стабилен ключ за адреса /koncesii/<slug>/dokumenti/<key>. */
   key: string;
   title: string | null;
   kind: string | null;

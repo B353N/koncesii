@@ -1,5 +1,6 @@
 import { redirect } from "react-router";
 import type { Route } from "./+types/concessions";
+import { PATHS } from "../paths";
 import { DataPending } from "../components";
 import {
   ConcessionsListView,
@@ -27,7 +28,7 @@ const DESCRIPTION =
 export function meta({ loaderData }: Route.MetaArgs) {
   const page = loaderData?.page ?? 1;
   const pages = Math.max(1, Math.ceil((loaderData?.total ?? 0) / PAGE_SIZE));
-  const paged = pagedMeta("/concessions", page, pages);
+  const paged = pagedMeta(PATHS.concessions, page, pages);
   const suffix = paged.pageLabel ? `, ${paged.pageLabel}` : "";
   const title = `Концесии в България${suffix}`;
   const description = paged.pageLabel
@@ -86,7 +87,7 @@ export default function Concessions({ loaderData }: Route.ComponentProps) {
         total={total}
         page={page}
         filters={filters}
-        basePath="/concessions"
+        basePath={PATHS.concessions}
         title="Концесии"
       />
     </>

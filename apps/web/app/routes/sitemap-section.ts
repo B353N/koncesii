@@ -8,7 +8,15 @@ import {
 } from "../queries.server";
 import { POSTS } from "../blog/posts";
 import { KIND_LABELS } from "../format";
-import { concessionHref } from "../slug";
+import {
+  blogHref,
+  companyHref,
+  concessionHref,
+  documentHref,
+  grantorHref,
+  kindHref,
+  PATHS,
+} from "../paths";
 
 export const BASE = "https://koncesii.com";
 export const SECTIONS = [
@@ -33,22 +41,22 @@ type Section = (typeof SECTIONS)[number];
  * Страници, които се менят с всяко обновяване на данните. Извън списъка
  * остават статичните (методологията) - те се менят само с PR.
  */
-const STATIC_PAGES = new Set(["/methodology"]);
+const STATIC_PAGES = new Set<string>([PATHS.methodology]);
 
 /** Анализите се менят само с PR; числата в тях - с данните. */
 
 const PAGES = [
   "",
-  "/concessions",
-  ...Object.keys(KIND_LABELS).map((k) => `/concessions/vid/${k}`),
-  "/grantors",
-  "/companies",
-  "/map",
-  "/flags",
-  "/changes",
-  "/blog",
-  ...POSTS.map((post) => `/blog/${post.slug}`),
-  "/methodology",
+  PATHS.concessions,
+  ...Object.keys(KIND_LABELS).map(kindHref),
+  PATHS.grantors,
+  PATHS.companies,
+  PATHS.map,
+  PATHS.flags,
+  PATHS.changes,
+  PATHS.blog,
+  ...POSTS.map((post) => blogHref(post.slug)),
+  PATHS.methodology,
 ];
 
 interface SitemapEntry {
@@ -77,21 +85,21 @@ function urlsFor(section: Section): SitemapEntry[] {
     }
     case "grantors":
       return listGrantors().map((g) => ({
-        loc: `${BASE}/grantors/${encodeURIComponent(g.slug)}`,
+        loc: `${BASE}${grantorHref(g.slug)}`,
         lastmod: dataDate,
       }));
     case "companies":
-      // страница има само компания с ЕИК (/companies/:eik)
+      // страница има само компания с ЕИК (/kompanii/<име>-<ЕИК>)
       return listCompanies()
         .filter((c) => c.eik)
         .map((c) => ({
-          loc: `${BASE}/companies/${encodeURIComponent(c.eik!)}`,
+          loc: `${BASE}${companyHref(c.name, c.eik!)}`,
           lastmod: dataDate,
         }));
     case "documents":
       // текстът на договорите/решенията - lastmod е този на партидата
       return documentPagesForSitemap().map((d) => ({
-        loc: `${BASE}${concessionHref(d.slug)}/documents/${d.key}`,
+        loc: `${BASE}${documentHref(d.slug, d.key)}`,
         lastmod: d.lastmod ?? undefined,
       }));
   }

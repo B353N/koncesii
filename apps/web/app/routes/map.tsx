@@ -4,6 +4,7 @@ import { MapApp } from "../map-app";
 import { getSummary, mapPoints } from "../queries.server";
 import type { RouteHandle } from "../root";
 import { absUrl, ogDescriptors, pageTitle } from "../seo";
+import { PATHS } from "../paths";
 
 export const handle: RouteHandle = { fullBleed: true };
 
@@ -19,9 +20,9 @@ export function meta({}: Route.MetaArgs) {
       title: "Карта на концесиите в България",
       description:
         "Концесиите в България върху карта: морски плажове, находища и кариери, с индикаторите на всяка сделка и връзка към партидата ѝ в регистъра.",
-      url: absUrl("/map"),
+      url: absUrl(PATHS.map),
     }),
-    { tagName: "link", rel: "canonical", href: "https://koncesii.com/map" },
+    { tagName: "link", rel: "canonical", href: absUrl(PATHS.map) },
   ];
 }
 
@@ -67,7 +68,7 @@ export default function MapPage({ loaderData }: Route.ComponentProps) {
             GeoNames
           </a>{" "}
           (CC BY 4.0), затова са приблизителни. Данните са и като{" "}
-          <a href="/map.geojson" className="underline">
+          <a href={PATHS.mapGeojson} className="underline">
             GeoJSON
           </a>
           .

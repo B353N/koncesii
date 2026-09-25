@@ -20,7 +20,7 @@ const LINKSET = {
       ],
       "service-doc": [
         {
-          href: `${BASE}/methodology`,
+          href: `${BASE}/metodologiya`,
           type: "text/html",
           title: "Методология на индикаторите за риск",
         },

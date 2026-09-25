@@ -7,7 +7,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // setWorkerUrl преди първата карта. Същият origin → покрива се от
 // worker-src 'self' в CSP (entry.server.tsx).
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import { FLAG_DESCRIPTIONS, KIND_LABELS } from "./format";
+import { FLAG_DESCRIPTIONS, FLAG_SHORT, KIND_LABELS } from "./format";
 import {
   BASEMAP_STYLE,
   BG_BOUNDS,
@@ -18,18 +18,8 @@ import {
 } from "./map-style";
 import type { MapPoint } from "./queries.server";
 import { concessionHref } from "./slug";
+import { companyHref, PATHS } from "./paths";
 
-/** Кратките имена на индикаторите за флагчетата в списъка. */
-export const FLAG_SHORT: Record<string, string> = {
-  LOW_PAYMENT: "Ниско възнаграждение",
-  SINGLE_BIDDER: "Един участник",
-  YOUNG_COMPANY: "Нова компания",
-  LONG_TERM: "Дълъг срок",
-  GRACE_PERIOD: "Гратисен период",
-  NO_INDEXATION: "Без индексация",
-  MISSING_MONEY: "Без вписана сума",
-  DATA_CONFLICT: "Противоречие в данните",
-};
 const FLAG_SEV: Record<string, number> = {
   LOW_PAYMENT: 3,
   SINGLE_BIDDER: 3,
@@ -222,7 +212,7 @@ export function MapApp({
   useEffect(() => {
     let cancelled = false;
     let map: MlMap | undefined;
-    const data = fetch("/map-points.json").then(
+    const data = fetch(PATHS.mapPoints).then(
       (r) => r.json() as Promise<MapPoint[]>,
     );
     Promise.all([import("maplibre-gl"), data])
@@ -333,7 +323,7 @@ export function MapApp({
       `<div class="mt-0.5 text-[13px] text-stone">${
         p.company
           ? p.company_eik
-            ? `<a class="text-water underline" href="/companies/${encodeURIComponent(p.company_eik)}">${escapeHtml(p.company)}</a>`
+            ? `<a class="text-water underline" href="${companyHref(p.company, p.company_eik)}">${escapeHtml(p.company)}</a>`
             : escapeHtml(p.company)
           : "Концесионерът не е вписан"
       }</div>` +
@@ -384,7 +374,7 @@ export function MapApp({
         <div className="border-b border-limestone px-4 pt-6 pb-4 sm:px-[22px]">
           {heading}
           <div className="mt-2 mb-4 text-stone">{intro}</div>
-          <Form action="/search" className="relative">
+          <Form action={PATHS.search} className="relative">
             <svg
               width="17"
               height="17"
@@ -514,7 +504,7 @@ export function MapApp({
           )}
           {list.length > LIST_LIMIT && (
             <li className="px-[22px] py-4 text-[14px]">
-              <Link to="/concessions" className="font-semibold text-water">
+              <Link to={PATHS.concessions} className="font-semibold text-water">
                 Още {nf.format(list.length - LIST_LIMIT)} в този изглед. Вижте
                 всички концесии
               </Link>
@@ -538,7 +528,7 @@ export function MapApp({
           <p className="absolute inset-x-4 top-4 rounded-xl bg-raised p-4 text-stone">
             Картата не можа да се зареди. Списъкът вляво работи, а данните са
             достъпни и като{" "}
-            <a href="/map.geojson" className="text-water underline">
+            <a href={PATHS.mapGeojson} className="text-water underline">
               GeoJSON
             </a>
             .

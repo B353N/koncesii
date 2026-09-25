@@ -3,6 +3,7 @@ import type { Route } from "./+types/grantors";
 import { DataPending, ExportLinks, PageTitle } from "../components";
 import { getSummary, listGrantors } from "../queries.server";
 import { absUrl, ogDescriptors, pageTitle } from "../seo";
+import { grantorHref, PATHS } from "../paths";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -16,12 +17,12 @@ export function meta({}: Route.MetaArgs) {
       title: "Концеденти: кой отдава концесии в България",
       description:
         "Кой орган какво е отдал под концесия: общини и министерства с брой концесии и индикатори.",
-      url: absUrl("/grantors"),
+      url: absUrl(PATHS.grantors),
     }),
     {
       tagName: "link",
       rel: "canonical",
-      href: "https://koncesii.com/grantors",
+      href: absUrl(PATHS.grantors),
     },
   ];
 }
@@ -46,7 +47,7 @@ export default function Grantors({ loaderData }: Route.ComponentProps) {
         title="Концеденти"
         count={`${rows.length} органа, отдали концесии`}
       />
-      <ExportLinks csvHref="/grantors.csv" />
+      <ExportLinks csvHref={PATHS.grantorsCsv} />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
           <thead>
@@ -70,7 +71,7 @@ export default function Grantors({ loaderData }: Route.ComponentProps) {
               <tr key={r.slug} className="border-b border-limestone">
                 <td className="py-2 pr-2">
                   <Link
-                    to={`/grantors/${encodeURIComponent(r.slug)}`}
+                    to={grantorHref(r.slug)}
                     className="text-water underline decoration-1 underline-offset-2"
                   >
                     {r.name}

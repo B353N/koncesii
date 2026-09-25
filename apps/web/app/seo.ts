@@ -2,6 +2,8 @@
  * SEO помощници: заглавие на страница, canonical адреси и пагинация.
  * Чисти функции без достъп до базата - тестват се в seo.test.ts.
  */
+import { shortObjectTitle } from "./format";
+import { translit } from "./slug";
 
 export const SITE = "https://koncesii.com";
 export const SITE_NAME = "КОНЦЕСИИ";
@@ -9,6 +11,16 @@ export const SITE_NAME = "КОНЦЕСИИ";
 /** "<нещо> | КОНЦЕСИИ" - един суфикс за целия сайт. */
 export function pageTitle(text: string): string {
   return `${text} | ${SITE_NAME}`;
+}
+
+/**
+ * Един адрес на страница: без наклонена черта накрая и с малки латински
+ * букви (/Koncesii/ → /koncesii). Кирилицата не се пипа - тя е само в
+ * старите адреси, които имат собствени 301 (routes/legacy-redirect.ts).
+ */
+export function normalizePath(pathname: string): string {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  return p.replace(/[A-Z]+/g, (m) => m.toLowerCase());
 }
 
 /** Абсолютен адрес на страница по път (без домейн). */
@@ -131,64 +143,6 @@ function usableName(name: string | null | undefined): string | null {
   return t;
 }
 
-export interface ConcessionTitleParts {
-  title: string;
-  regNum: string;
-  /** Вид на обекта: „Морски плаж", „Язовир" … */
-  kindLabel?: string | null;
-  /** Описанието на обекта от раздел IV, ако е по-конкретно от заглавието. */
-  objectDescription?: string | null;
-  grantorName?: string | null;
-  /** „за услуги", „за строителство" - видът на самата концесия. */
-  concessionKindLabel?: string | null;
-}
-
-/**
- * Заглавието на партидата за <title> и <h1> (без суфикса на сайта).
- * Родовите и празните заглавия се сглобяват от вид, обект и концедент;
- * дългите се режат и получават номера на партидата, защото отрязаната
- * част е точно тази, която ги различава. Пълният регистров текст остава
- * на страницата.
- */
-export function concessionTitle(p: ConcessionTitleParts): string {
-  const raw = (p.title ?? "").trim().replace(/\s+/gu, " ");
-  const grantor = usableName(p.grantorName);
-  const generic = !raw || isGenericTitle(raw);
-
-  let head: string;
-  if (generic) {
-    const objectPart = usableName(
-      p.objectDescription &&
-        p.objectDescription.trim().toLowerCase() !== raw.toLowerCase()
-        ? p.objectDescription
-        : null,
-    );
-    head = [
-      ["Концесия", p.concessionKindLabel].filter(Boolean).join(" "),
-      objectPart ?? p.kindLabel?.toLowerCase(),
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  } else {
-    head = raw;
-  }
-
-  // Опашката е фиксирана, главата се реже до бюджета. Номерът на партидата
-  // е винаги накрая: заглавията в регистъра се повтарят дословно между
-  // партиди на един и същи концедент („Концесия за строителство на
-  // автобусни спирки", 4 пъти за Варна), а отрязването маха точно
-  // различаващата част.
-  const tail: string[] = [];
-  if (grantor && !head.toLowerCase().includes(grantor.toLowerCase()))
-    tail.push(grantor);
-  tail.push(`партида ${regLabel(p.regNum)}`);
-
-  const tailText = ` · ${tail.join(" · ")}`;
-  return (
-    shortenTitle(head, Math.max(45, MAX_TITLE - tailText.length)) + tailText
-  );
-}
-
 /** Заглавие на страница за компания/концедент: името се реже, не се маха. */
 export function entityTitle(name: string, suffix: string, max = 120): string {
   return `${shortenTitle(name.trim(), max)} ${suffix}`.trim();
@@ -221,4 +175,94 @@ export function ogDescriptors(o: {
     { property: "og:url", content: o.url },
     ...(o.type ? [{ property: "og:type", content: o.type }] : []),
   ];
+}
+
+export interface HeadlineParts {
+  title: string | null;
+  /** Вид на обекта: „Морски плаж", „Язовир" … */
+  kindLabel?: string | null;
+  /** „за услуги", „за строителство" - видът на самата концесия. */
+  concessionKindLabel?: string | null;
+  /** Описанието на първия обект, ако заглавието е родово. */
+  objectDescription?: string | null;
+  grantorName?: string | null;
+  municipality?: string | null;
+}
+
+/**
+ * Какво е обектът, накратко: „Морски плаж „Панорама - север"",
+ * „Находище „Кайметлий", пясъци и чакъли", или регистровото заглавие,
+ * отрязано на смислен разделител. Родовите заглавия („услуга") се
+ * заменят с вида на концесията и описанието на обекта. Нищо не се измисля.
+ */
+function headlineLabel(p: HeadlineParts): string {
+  const raw = (p.title ?? "").trim().replace(/\s+/gu, " ");
+  if (raw && !isGenericTitle(raw)) {
+    const short = shortObjectTitle(raw);
+    return /^(Находище|Морски плаж) /u.test(short)
+      ? short
+      : shortenTitle(raw, 80);
+  }
+  const obj = usableName(
+    p.objectDescription &&
+      p.objectDescription.trim().toLowerCase() !== raw.toLowerCase()
+      ? p.objectDescription
+      : null,
+  );
+  const what = obj
+    ? shortenTitle(shortObjectTitle(obj), 60)
+    : (p.kindLabel?.toLowerCase() ?? null);
+  const head = ["Концесия", p.concessionKindLabel].filter(Boolean).join(" ");
+  return what ? `${head}: ${what}` : head;
+}
+
+/** Мястото: общината на обекта, иначе общината от името на концедента. */
+function headlinePlace(p: HeadlineParts): string | null {
+  const m = p.municipality?.trim();
+  if (m) return m;
+  const g = usableName(p.grantorName);
+  const fromGrantor = g && /община\s+(.+)$/iu.exec(g);
+  return fromGrantor ? fromGrantor[1]!.trim() : null;
+}
+
+/**
+ * H1 и основата на <title> на партида: обектът и общината
+ * („Морски плаж „Панорама - север", община Варна"). Думите, които хората
+ * търсят, са отпред; номерът на партидата не е тук (виж concessionPageTitle).
+ */
+export function concessionHeadline(p: HeadlineParts): string {
+  const label = headlineLabel(p);
+  const place = headlinePlace(p);
+  if (!place || translit(label).includes(translit(place))) return label;
+  return `${label}, община ${place}`;
+}
+
+/**
+ * <title> на партида: заглавието + „концесия", ако думата я няма. Когато
+ * две партиди биха имали едно и също заглавие (4 еднакви „Концесия за
+ * строителство на автобусни спирки" във Варна), номерът ги различава.
+ */
+export function concessionPageTitle(
+  headline: string,
+  regNum: string,
+  duplicate: boolean,
+): string {
+  const tail = `${/концеси/iu.test(headline) ? "" : " - концесия"}${
+    duplicate ? ` (партида ${regLabel(regNum)})` : ""
+  }`;
+  // целият <title> с „ | КОНЦЕСИИ" остава под ~110 знака
+  return shortenTitle(headline, Math.max(60, 98 - tail.length)) + tail;
+}
+
+/**
+ * Описателната част на адреса на партида: същият етикет като заглавието и
+ * общината („Морски плаж „Панорама - север" Варна"); slugify го прави на
+ * латиница.
+ */
+export function concessionUrlText(p: HeadlineParts): string {
+  const label = headlineLabel(p);
+  const place = headlinePlace(p);
+  if (place && !translit(label).includes(translit(place)))
+    return `${label} ${place}`;
+  return label;
 }

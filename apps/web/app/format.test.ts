@@ -4,8 +4,12 @@ import {
   fmtEur,
   fmtMonths,
   fmtPercent,
+  ID_CARD_MASK,
+  idCardNumbers,
   isEgn,
   maskEgn,
+  maskIdCard,
+  maskPersonalData,
   shortObjectTitle,
   toCsv,
   withoutEgn,
@@ -121,4 +125,62 @@ test("withoutEgn маха ЕГН от името на концесионера �
   for (const keep of ['"МАТ" ООД', "Сдружение Лесовъди", "eik:201207954"]) {
     expect(withoutEgn(keep)).toBe(keep);
   }
+});
+
+// Измислен номер на лична карта - не е на реално лице.
+const ID = "600123457";
+
+test('maskIdCard скрива номера на лична карта по етикета или по „издадена"', () => {
+  for (const [text, masked] of [
+    [`л.к. № ${ID}, изд. на`, `л.к. № ${ID_CARD_MASK}, изд. на`],
+    [`л. к. Ne ${ID} от`, `л. к. Ne ${ID_CARD_MASK} от`],
+    [`лк: ${ID}/01.02.2015г. МВР`, `лк: ${ID_CARD_MASK}/01.02.2015г. МВР`],
+    [`лична карта No ${ID}.`, `лична карта No ${ID_CARD_MASK}.`],
+    [
+      `личен паспорт серия Ж, №${ID};`,
+      `личен паспорт серия Ж, №${ID_CARD_MASK};`,
+    ],
+    // етикетът изкривен от OCR
+    [`притежаващ IK. Хо\n${ID}, от`, `притежаващ IK. Хо\n${ID_CARD_MASK}, от`],
+    [`JI.K.NQ${ID} H9`, `JI.K.NQ${ID_CARD_MASK} H9`],
+    [`A.K. Хо ${ID} и`, `A.K. Хо ${ID_CARD_MASK} и`],
+    [`лкЖю || ${ID}. |`, `лкЖю || ${ID_CARD_MASK}. |`],
+    // без етикет, но с „издадена" след номера
+    [`RNG .${ID}, изд. на`, `RNG .${ID_CARD_MASK}, изд. на`],
+    [`№ ${ID}\nиздадена от МВР`, `№ ${ID_CARD_MASK}\nиздадена от МВР`],
+  ]) {
+    expect(maskIdCard(text!)).toBe(masked);
+  }
+});
+
+test("maskIdCard оставя ЕИК и другите 9-цифрени числа", () => {
+  for (const keep of [
+    "ЕИК 201207954",
+    "с ЕИК: 201207954, издадено от Агенция по вписванията",
+    "БУЛСТАТ 000123456, издаден",
+    "EIK:201207954, изд.",
+    "факс: 032123456",
+    "акт № 123456789 от",
+    "Скица № 15-123456789-01.02.2020 г.",
+    "л.к. № 12345678, изд.", // 8 цифри - не е номер
+  ]) {
+    expect(maskIdCard(keep)).toBe(keep);
+  }
+});
+
+test("maskIdCard скрива и номера, чийто етикет е извън откъса", () => {
+  const page = `Иван Иванов, л.к. № ${ID}, изд. на 01.02.2015 г.`;
+  expect(idCardNumbers(page)).toEqual(new Set([ID]));
+  // откъсът от търсенето, с маркерите на snippet()
+  const snippet = `…\u0001${ID}\u0002 от МВР - Пловдив…`;
+  expect(maskIdCard(snippet)).toBe(snippet);
+  expect(maskIdCard(snippet, idCardNumbers(page))).toBe(
+    `…\u0001${ID_CARD_MASK}\u0002 от МВР - Пловдив…`,
+  );
+});
+
+test("maskPersonalData скрива и ЕГН, и лична карта", () => {
+  expect(maskPersonalData(`ЕГН ${EGN}, л.к. № ${ID}, изд. на`)).toBe(
+    `ЕГН ${EGN_MASK}, л.к. № ${ID_CARD_MASK}, изд. на`,
+  );
 });

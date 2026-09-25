@@ -324,3 +324,61 @@ export function withoutEgn(name: string): string {
     .trim();
   return maskEgn(out || name);
 }
+
+// ── Номер на лична карта / паспорт: не се публикува (docs/core-scope.md) ──
+
+/** Как се показва скрит номер на документ за самоличност. */
+export const ID_CARD_MASK = "*********";
+
+/**
+ * Етикетът пред номера, до 12 знака без цифри преди него („л.к. № ",
+ * „лк: ", „лична карта No "). OCR изкривява „л.к." по много начини:
+ * „лк.Хо", „л. x.", „JI.K.", „A.K.", „nk.", „IK.", „mx.".
+ */
+const ID_CARD_LABEL =
+  /(?<!\p{L})(?:лична\s{1,3}карта|паспорт|(?:л|ji)[.,]?\s?[кkx]|[jaаn](?:\.\s?[кkx]|\s?[кkx]\.)|ik\.|mx\.)\D{0,12}$/iu;
+/** След номера: „, издадена на ... от МВР", „изд. на". */
+const ID_CARD_ISSUED = /^\D{0,12}?изд/iu;
+/** ЕИК/БУЛСТАТ също е 9 цифри - след такъв етикет числото не се пипа. */
+const COMPANY_ID_LABEL = /(?:ЕИК|EIK|БУЛСТАТ)\D{0,4}$/iu;
+
+const NINE_DIGITS = /(?<!\d)\d{9}(?!\d)/g;
+
+/**
+ * Номерата на документи за самоличност в текста: самостоятелно 9-цифрено
+ * число след етикет „л.к."/„лична карта"/„паспорт" или веднага преди
+ * „изд(адена)". Без етикет 9 цифри са най-често ЕИК, затова само по
+ * контекста.
+ */
+export function idCardNumbers(text: string): Set<string> {
+  const found = new Set<string>();
+  for (const m of text.matchAll(NINE_DIGITS)) {
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    if (COMPANY_ID_LABEL.test(before)) continue;
+    if (
+      ID_CARD_LABEL.test(before) ||
+      ID_CARD_ISSUED.test(text.slice(m.index + 9, m.index + 40))
+    ) {
+      found.add(m[0]);
+    }
+  }
+  return found;
+}
+
+/**
+ * Скрива номерата на документи за самоличност. `known` са номера, намерени
+ * в по-широк контекст - откъсът от търсенето може да е отрязал етикета.
+ */
+export function maskIdCard(text: string, known?: Set<string>): string {
+  const numbers = idCardNumbers(text);
+  for (const n of known ?? []) numbers.add(n);
+  if (numbers.size === 0) return text;
+  return text.replace(NINE_DIGITS, (digits) =>
+    numbers.has(digits) ? ID_CARD_MASK : digits,
+  );
+}
+
+/** ЕГН и номер на документ за самоличност - за текст от документите. */
+export function maskPersonalData(text: string, known?: Set<string>): string {
+  return maskIdCard(maskEgn(text), known);
+}

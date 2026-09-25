@@ -10,6 +10,8 @@ import { beforeAll, expect, test } from "vitest";
  * Базата е от миграцията, с измислен ЕГН с валидна контролна цифра.
  */
 const EGN = "7501020018";
+const ID_CARD = "600123457"; // измислен номер на лична карта
+const EIK = "201207954";
 const PERSON = `Иван Петров Иванов с ЕГН ${EGN}`;
 const PERSON_ID = `name:иван-петров-иванов-с-егн-${EGN}`;
 const DOC_URL =
@@ -38,7 +40,7 @@ beforeAll(async () => {
     INSERT INTO documents (id, concession_id, title, url, text_status, text_method, page_count)
       VALUES (1, 'k:D-000001', 'Договор', '${DOC_URL}', 'ok', 'ocr', 1);
     INSERT INTO document_pages (id, document_id, page, method, text)
-      VALUES (1, 1, 1, 'ocr', 'Концесионер: ${PERSON}, с годишно възнаграждение 100 лв.');
+      VALUES (1, 1, 1, 'ocr', 'Концесионер: ${PERSON}, л.к. № ${ID_CARD}, изд. на 01.02.2015 г. от МВР - Пловдив, с годишно възнаграждение 100 лв. Концедент: Община Горно, ЕИК ${EIK}.');
     INSERT INTO document_pages_fts (rowid, text)
       SELECT id, text FROM document_pages;
     INSERT INTO extracted_facts (concession_id, document_id, field, value_raw, value_eur, quote,
@@ -84,4 +86,18 @@ test("търсене по ЕГН не връща нищо", () => {
   expect(q.listConcessions({ q: EGN }).total).toBe(0);
   expect(q.searchDocuments(EGN).total).toBe(0);
   expect(q.listConcessions({ q: "Иванов" }).total).toBe(1);
+});
+
+test("номерът на лична карта не се показва и не се търси, ЕИК се търси", () => {
+  const hides = (value: unknown) => !JSON.stringify(value).includes(ID_CARD);
+  const key = q.getConcession("D-000001")!.documents[0]!.key;
+  const doc = q.getDocumentText("D-000001", key);
+  expect(doc?.pages[0]?.text).toContain("л.к. № *********");
+  expect(doc?.pages[0]?.text).toContain(`ЕИК ${EIK}`);
+  expect(hides(doc)).toBe(true);
+
+  expect(hides(q.searchDocuments("Иванов Пловдив"))).toBe(true);
+  expect(q.searchDocuments(ID_CARD).total).toBe(0);
+  expect(q.searchDocuments(`л.к. ${ID_CARD}`).total).toBe(0);
+  expect(q.searchDocuments(EIK).total).toBe(1);
 });

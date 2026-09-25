@@ -5,7 +5,10 @@ import {
   CONCESSION_KIND_LABELS,
   FACT_ORDER,
   KIND_LABELS,
+  idCardNumbers,
   maskEgn,
+  maskIdCard,
+  maskPersonalData,
   SEVERITY_RANK,
   shortObjectTitle,
   withoutEgn,
@@ -199,6 +202,25 @@ function withSlugs<
  */
 function asksForEgn(q: string): boolean {
   return maskEgn(q) !== q;
+}
+
+/**
+ * Същото за номер на лична карта. 9 цифри сами по себе си са най-често
+ * ЕИК, затова заявката се отказва само ако някоя страница, в която се
+ * среща числото, го показва като номер на документ за самоличност.
+ */
+function asksForIdCard(db: Database.Database, q: string): boolean {
+  if (maskIdCard(q) !== q) return true;
+  const numbers = q.match(/(?<!\d)\d{9}(?!\d)/g) ?? [];
+  if (numbers.length === 0) return false;
+  const pages = db.prepare<[string], { text: string }>(
+    `SELECT p.text FROM document_pages_fts
+     JOIN document_pages p ON p.id = document_pages_fts.rowid
+     WHERE document_pages_fts MATCH ?`,
+  );
+  return numbers.some((n) =>
+    pages.all(`"${n}"`).some((p) => idCardNumbers(p.text).has(n)),
+  );
 }
 
 /** Slug за суров партиден номер. */
@@ -1019,8 +1041,8 @@ function factRows(
   return rows
     .map((r) => ({
       ...r,
-      value_raw: maskEgn(r.value_raw),
-      quote: maskEgn(r.quote),
+      value_raw: maskPersonalData(r.value_raw),
+      quote: maskPersonalData(r.quote),
       document_key: documentKey(r.document_url),
     }))
     .sort((a, b) => order(a.field) - order(b.field));
@@ -1061,7 +1083,7 @@ export function getDocumentText(
             "SELECT page, method, text FROM document_pages WHERE document_id = ? ORDER BY page",
           )
           .all(docId)
-          .map((p) => ({ ...p, text: maskEgn(p.text) }));
+          .map((p) => ({ ...p, text: maskPersonalData(p.text) }));
   return {
     concession: {
       reg_num: c.reg_num,
@@ -1160,6 +1182,7 @@ export function searchDocuments(
   if (!db || !match || !hasDocumentText(db) || asksForEgn(q))
     return { hits: [], total: 0 };
   try {
+    if (asksForIdCard(db, q)) return { hits: [], total: 0 };
     const total =
       db
         .prepare<[string], { n: number }>(
@@ -1167,9 +1190,12 @@ export function searchDocuments(
         )
         .get(match)?.n ?? 0;
     const rows = db
-      .prepare<[string, number], Omit<DocumentHit, "slug" | "document_key">>(
+      .prepare<
+        [string, number],
+        Omit<DocumentHit, "slug" | "document_key"> & { page_text: string }
+      >(
         `SELECT c.reg_num, c.title AS concession_title, d.title AS document_title,
-                d.url AS document_url, p.page, p.method,
+                d.url AS document_url, p.page, p.method, p.text AS page_text,
                 snippet(document_pages_fts, 0, char(1), char(2), '…', 24) AS snippet
          FROM document_pages_fts
          JOIN document_pages p ON p.id = document_pages_fts.rowid
@@ -1181,9 +1207,11 @@ export function searchDocuments(
       )
       .all(match, limit);
     return {
-      hits: withSlugs(db, rows).map((r) => ({
+      // откъсът може да е отрязал етикета „л.к." - номерата се търсят в
+      // цялата страница
+      hits: withSlugs(db, rows).map(({ page_text, ...r }) => ({
         ...r,
-        snippet: maskEgn(r.snippet),
+        snippet: maskPersonalData(r.snippet, idCardNumbers(page_text)),
         document_key: documentKey(r.document_url),
       })),
       total,

@@ -291,7 +291,7 @@ describe.skipIf(!canPdf || !tools.archiver?.startsWith("unar:"))(
     beforeAll(async () => {
       rmSync(dir, { recursive: true, force: true });
       mkdirSync(join(nkr, "files", "lot"), { recursive: true });
-      // ZIP с един файл, чието име е в CP866 без UTF-8 флаг — сглобен ръчно
+      // ZIP с един файл, чието име е в CP866 без UTF-8 флаг - сглобен ръчно
       const pdf = readFileSync(join(FIXTURES, "contract.pdf"));
       const name = Buffer.from([
         0x84, 0xae, 0xa3, 0xae, 0xa2, 0xae, 0xe0, 0x2e, 0x70, 0x64, 0x66,

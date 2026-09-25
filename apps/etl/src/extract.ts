@@ -235,10 +235,10 @@ export interface Tools {
   /**
    * Разархиваторите по ред на опитване: „команда: версия; …". unar първи
    * (стари и „solid" RAR, имена в CP866), после 7-Zip, bsdtar (системният
-   * tar на macOS) — последен.
+   * tar на macOS) - последен.
    */
   archiver: string | null;
-  /** Ghostscript — поправя повредени PDF, които poppler не може да отвори. */
+  /** Ghostscript - поправя повредени PDF, които poppler не може да отвори. */
   gs: string | null;
 }
 
@@ -354,7 +354,7 @@ export function sniff(head: Buffer, ext: string): Sniffed {
   ) {
     return "image";
   }
-  // XML (напр. електронни формуляри, .onkr) и HTML — текстът е между таговете;
+  // XML (напр. електронни формуляри, .onkr) и HTML - текстът е между таговете;
   // Windows често ги записва в UTF-16, със или без BOM
   const utf16 = utf16Order(head);
   if (utf16) {
@@ -609,7 +609,7 @@ const ENTITIES: Record<string, string> = {
 };
 
 /**
- * UTF-16 по BOM или, без BOM, по нулевия байт до „<" в началото —
+ * UTF-16 по BOM или, без BOM, по нулевия байт до „<" в началото -
  * електронните формуляри в НКР идват и така.
  */
 function utf16Order(head: Buffer): "utf-16le" | "utf-16be" | null {
@@ -720,9 +720,9 @@ async function filePages(
 }
 
 /**
- * Разархивира в dir: ZIP първо с unzip, после — и всичко друго — с първия
+ * Разархивира в dir: ZIP първо с unzip, после - и всичко друго - с първия
  * разархиватор, който успее. bsdtar не чете „solid" RAR; 7-Zip не чете
- * някои стари RAR методи и кирилски имена в CP866 на macOS; unar — да.
+ * някои стари RAR методи и кирилски имена в CP866 на macOS; unar - да.
  */
 async function unpack(
   path: string,
@@ -741,7 +741,7 @@ async function unpack(
   const cmds = archiverCommands(tools);
   if (cmds.length === 0) {
     throw new Error(
-      `липсва разархиватор за ${kind} — macOS: brew install unar sevenzip`,
+      `липсва разархиватор за ${kind} - macOS: brew install unar sevenzip`,
     );
   }
   const failures: string[] = [];
@@ -760,7 +760,7 @@ async function unpack(
   }
   throw new Error(
     failures.join(" | ") +
-      (!cmds.includes("unar") ? " — опитайте с unar: brew install unar" : ""),
+      (!cmds.includes("unar") ? " - опитайте с unar: brew install unar" : ""),
   );
 }
 
@@ -769,7 +769,7 @@ const CP866 = new TextDecoder("ibm866");
 
 /**
  * Имената в архива, които не са валиден UTF-8 (ZIP от български Windows
- * пази кирилицата в CP866), се преименуват към декодираното име — иначе
+ * пази кирилицата в CP866), се преименуват към декодираното име - иначе
  * Node не може да ги отвори, а инструментите не могат да ги получат.
  */
 function fixEntryNames(dir: string): void {
@@ -779,7 +779,7 @@ function fixEntryNames(dir: string): void {
       name = UTF8.decode(raw);
     } catch {
       const decoded = CP866.decode(raw).replace(/[/\\\0]/g, "_");
-      // при съвпадение с вече съществуващо име — уникален суфикс
+      // при съвпадение с вече съществуващо име - уникален суфикс
       name = existsSync(join(dir, decoded))
         ? `${decoded}-${raw.toString("hex").slice(0, 8)}`
         : decoded;
@@ -1022,12 +1022,12 @@ async function main() {
   }
   if (!tools.archiver?.startsWith("unar:")) {
     console.warn(
-      "[extract] без unar старите/„solid“ RAR и ZIP с кирилски имена (CP866) може да не се отворят — macOS: brew install unar",
+      "[extract] без unar старите/„solid“ RAR и ZIP с кирилски имена (CP866) може да не се отворят - macOS: brew install unar",
     );
   }
   if (!tools.gs) {
     console.warn(
-      "[extract] без Ghostscript повредените PDF минават направо през OCR — macOS: brew install ghostscript",
+      "[extract] без Ghostscript повредените PDF минават направо през OCR - macOS: brew install ghostscript",
     );
   }
   if (!tools.tesseract) {

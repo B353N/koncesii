@@ -74,7 +74,7 @@ const SPEC = {
         responses: {
           "200": {
             description:
-              "Концесията; всяко парично поле носи *_raw (оригинала), *_eur (нормализирано, BGN→EUR по 1.95583) и *_flag (качество: ok/missing/parsed_from_text/contradictory); facts[] носи value_raw, quote, page, document_url и outcome (filled/agrees/conflict/display)",
+              "Концесията; всяко парично поле носи *_raw (оригинала), *_eur (нормализирано, BGN→EUR по 1.95583) и *_flag (качество: ok/missing/parsed_from_text/contradictory); facts[] носи value_raw, quote, page, document_url и outcome (filled/agrees/compatible/conflict/display)",
             content: { "application/json": { schema: { type: "object" } } },
           },
           "404": { description: "Няма партида с този номер" },

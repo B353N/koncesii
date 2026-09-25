@@ -71,6 +71,44 @@ test("разминаване с регистъра: стойността ост�
   });
 });
 
+test("срок без удълженията при по-дълъг регистър е съвместим, не разминаване", () => {
+  db.prepare(
+    "UPDATE concessions SET term_raw = '240 месеца', term_months = 240, term_flag = 'ok' WHERE id = 'k:X-1'",
+  ).run();
+  const r = applyFacts(
+    db,
+    candidates(
+      "Срок на концесията: 1) Срок на концесията, без предвидените удължавания: 180 месеца 2) Предвидени в концесионния договор удължавания на срока на концесията: ☒ Да.",
+    ),
+    "2026-07-08",
+  );
+  expect(r.conflicts).toBe(0);
+  const c = db
+    .prepare(
+      "SELECT term_months, term_flag FROM concessions WHERE id = 'k:X-1'",
+    )
+    .get();
+  expect(c).toEqual({ term_months: 240, term_flag: "ok" });
+  const f = db
+    .prepare("SELECT outcome FROM extracted_facts WHERE field = 'term'")
+    .get();
+  expect(f).toEqual({ outcome: "compatible" });
+  // по-кратък регистър остава разминаване
+  db.prepare(
+    "UPDATE concessions SET term_months = 120 WHERE id = 'k:X-1'",
+  ).run();
+  db.prepare("DELETE FROM extracted_facts").run();
+  expect(
+    applyFacts(
+      db,
+      candidates(
+        "Срок на концесията, без предвидените удължавания: 180 месеца.",
+      ),
+      "2026-07-08",
+    ).conflicts,
+  ).toBe(1);
+});
+
 test("превалутирането на същата сума не е разминаване", () => {
   const r = applyFacts(
     db,

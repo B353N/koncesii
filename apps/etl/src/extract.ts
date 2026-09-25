@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
@@ -25,15 +25,23 @@ import { promisify } from "node:util";
  *
  * PDF с текстов слой → pdftotext; страница без текст (скан) или с
  * нечетим текстов слой → OCR: pdftoppm + tesseract -l bul+eng. Word/RTF/
- * Excel/ODT → LibreOffice → PDF → същото. Изображения → tesseract. ZIP,
- * RAR, 7z → всеки файл вътре, по ред на името (unzip; RAR/7z — bsdtar,
- * който на macOS е системният `tar`, иначе 7z или unar). Инструментите са детерминистични при
- * фиксирани версии; версиите се записват в .meta.json.
+ * Excel/ODT → LibreOffice → PDF → същото. Изображения → tesseract. XML/HTML
+ * → текстът между таговете. ZIP, RAR, 7z → всеки файл вътре, по ред на
+ * името (unzip; RAR/7z — 7z/unar, иначе bsdtar, който на macOS е системният
+ * `tar`, но не чете „solid" RAR). Повредено PDF без текстов слой → OCR на
+ * всяка страница. Инструментите са детерминистични при фиксирани версии;
+ * версиите се записват в .meta.json.
+ *
+ * Всеки инструмент тръгва в собствена група процеси с лимит за време; един
+ * файл има общ лимит (по подразбиране 30 мин.). Файл, който го надвиши, се
+ * записва като грешка „timeout" и не се опитва отново без --retry-timeouts.
+ * Дълъг файл се вижда в лога всяка минута със страницата, до която е стигнал.
  *
  * Възобновимо: файл с .meta.json за същия sha256 и същата версия на
  * извличането се прескача. Ingest-ът чете само кеша — не пуска инструменти.
  *
  *   pnpm extract --local <dir> [--jobs N] [--force] [--limit N]
+ *                [--file-timeout МИН] [--retry-timeouts]
  */
 
 const pexec = promisify(execFile);
@@ -54,7 +62,15 @@ export interface TextMeta {
   version: number;
   source_file: string;
   source_sha256: string;
-  kind: "pdf" | "office" | "image" | "zip" | "rar" | "7z" | "unsupported";
+  kind:
+    | "pdf"
+    | "office"
+    | "image"
+    | "markup"
+    | "zip"
+    | "rar"
+    | "7z"
+    | "unsupported";
   status: "ok" | "empty" | "unsupported" | "error";
   pages: number;
   chars: number;
@@ -102,6 +118,111 @@ export function textBase(nkrDir: string, file: string): string {
   return join(nkrDir, "text", noExt);
 }
 
+// ── Изпълнение на инструментите ─────────────────────────────────────────
+
+export class TimeoutError extends Error {}
+
+interface RunResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+}
+
+/**
+ * Пуска инструмента в собствена група процеси и я убива цялата при
+ * надвишено време или след края на главния процес. LibreOffice и
+ * tesseract пускат под-процеси; ако се убие само главният, под-процесът
+ * държи изхода отворен и командата „виси" безкрайно.
+ */
+export function run(
+  cmd: string,
+  args: string[],
+  opts: { timeoutMs: number; env?: NodeJS.ProcessEnv },
+): Promise<RunResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: opts.env ?? process.env,
+    });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    let errLen = 0;
+    child.stdout.on("data", (b: Buffer) => out.push(b));
+    child.stderr.on("data", (b: Buffer) => {
+      if (errLen < 64 * 1024) {
+        err.push(b);
+        errLen += b.length;
+      }
+    });
+    const killGroup = () => {
+      try {
+        if (child.pid) process.kill(-child.pid, "SIGKILL");
+      } catch {
+        // групата вече я няма
+      }
+    };
+    const result = (code: number | null): RunResult => ({
+      code,
+      stdout: Buffer.concat(out).toString("utf8"),
+      stderr: Buffer.concat(err).toString("utf8"),
+    });
+    let settled = false;
+    let grace: NodeJS.Timeout | undefined;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (grace) clearTimeout(grace);
+      killGroup(); // останали под-процеси не бива да живеят след инструмента
+      fn();
+    };
+    const timer = setTimeout(
+      () =>
+        finish(() =>
+          reject(
+            new TimeoutError(
+              `${cmd}: прекъснат след ${Math.round(opts.timeoutMs / 1000)} s`,
+            ),
+          ),
+        ),
+      opts.timeoutMs,
+    );
+    child.on("error", (e) => finish(() => reject(e)));
+    child.on("exit", (code) => {
+      // под-процес може да държи изхода отворен след края на главния
+      grace = setTimeout(() => finish(() => resolve(result(code))), 5_000);
+    });
+    child.on("close", (code) => finish(() => resolve(result(code))));
+  });
+}
+
+/** Първият смислен ред от stderr — за съобщението за грешка. */
+function firstLine(text: string): string {
+  return (
+    text
+      .split("\n")
+      .map((l) => l.trim())
+      .find(Boolean) ?? ""
+  ).slice(0, 200);
+}
+
+/** Лимит на една стъпка (един инструмент). */
+const STEP_MS = 10 * 60_000;
+
+/** Състоянието на един файл: краен срок и напредък за лога. */
+interface Ctx {
+  deadline: number;
+  progress: { page: number; pages: number };
+}
+
+/** Колко време има стъпката: до 10 мин., но не след крайния срок на файла. */
+function timeLeft(ctx: Ctx): number {
+  const left = ctx.deadline - Date.now();
+  if (left <= 0) throw new TimeoutError("файлът надвиши лимита за време");
+  return Math.min(STEP_MS, left);
+}
+
 // ── Инструменти ──────────────────────────────────────────────────────────
 
 export interface Tools {
@@ -110,7 +231,11 @@ export interface Tools {
   tesseract: string | null;
   soffice: string | null;
   unzip: string | null;
-  /** Разархиваторът за RAR/7z: „команда: версия" (bsdtar, 7zz, 7z или unar). */
+  /**
+   * Разархиваторите за RAR/7z по ред на опитване: „команда: версия; …".
+   * 7z/unar първи — само те четат „solid" RAR; bsdtar (системният tar на
+   * macOS) — последен.
+   */
   archiver: string | null;
 }
 
@@ -131,23 +256,32 @@ async function version(cmd: string, args: string[]): Promise<string | null> {
   }
 }
 
-/** Първият наличен разархиватор, който чете RAR и 7z. */
+/** Всички налични разархиватори за RAR/7z, по ред на опитване. */
 async function detectArchiver(): Promise<string | null> {
   const candidates: Array<[string, string[]]> = [
-    ["bsdtar", ["--version"]],
-    ["tar", ["--version"]], // на macOS системният tar е bsdtar
     ["7zz", ["i"]],
     ["7z", ["i"]],
     ["unar", ["-v"]],
+    ["bsdtar", ["--version"]],
+    ["tar", ["--version"]], // на macOS системният tar е bsdtar
   ];
+  const found: string[] = [];
   for (const [cmd, args] of candidates) {
     const v = await version(cmd, args);
     if (!v) continue;
-    // GNU tar не чете RAR/7z
+    // GNU tar не чете RAR/7z; bsdtar и tar на macOS са едно и също
     if (cmd === "tar" && !/bsdtar|libarchive/i.test(v)) continue;
-    return `${cmd}: ${v}`;
+    if (cmd === "tar" && found.some((f) => f.startsWith("bsdtar:"))) continue;
+    found.push(`${cmd}: ${v}`);
   }
-  return null;
+  return found.length ? found.join("; ") : null;
+}
+
+function archiverCommands(tools: Tools): string[] {
+  return (tools.archiver ?? "")
+    .split("; ")
+    .map((a) => a.split(":")[0]!.trim())
+    .filter(Boolean);
 }
 
 export async function detectTools(): Promise<Tools> {
@@ -166,7 +300,7 @@ export async function detectTools(): Promise<Tools> {
 // ── Разпознаване на формата по съдържанието ──────────────────────────────
 
 type Sniffed =
-  "pdf" | "office" | "image" | "zip" | "rar" | "7z" | "unsupported";
+  "pdf" | "office" | "image" | "markup" | "zip" | "rar" | "7z" | "unsupported";
 const ARCHIVES = new Set<Sniffed>(["zip", "rar", "7z"]);
 
 const OFFICE_EXT = new Set([
@@ -214,6 +348,13 @@ export function sniff(head: Buffer, ext: string): Sniffed {
   ) {
     return "image";
   }
+  // XML (напр. електронни формуляри, .onkr) и HTML — текстът е между таговете
+  const start = head
+    .toString("latin1")
+    .replace(/^\xef\xbb\xbf/, "")
+    .trimStart()
+    .toLowerCase();
+  if (/^<(\?xml|!doctype|html)/.test(start)) return "markup";
   if (OFFICE_EXT.has(e)) return "office";
   return "unsupported";
 }
@@ -229,8 +370,7 @@ export function readableRatio(text: string): number {
   const compact = text.replace(/\s+/g, "");
   if (!compact.length) return 0;
   const good =
-    compact.match(/[\u0400-\u04FFA-Za-z0-9.,;:!?()[\]„“"'%№§\-–—/]/g)?.length ??
-    0;
+    compact.match(/[Ѐ-ӿA-Za-z0-9.,;:!?()[\]„“"'%№§\-–—/]/g)?.length ?? 0;
   return good / compact.length;
 }
 
@@ -239,58 +379,72 @@ export function needsOcr(pageText: string): boolean {
   return chars < MIN_PAGE_CHARS || readableRatio(pageText) < MIN_READABLE_RATIO;
 }
 
-const BIG = { maxBuffer: 512 * 1024 * 1024 };
-
-async function pdfText(path: string): Promise<string[]> {
-  const { stdout } = await pexec(
+/**
+ * Текстовият слой. Повредено PDF (счупена xref таблица) кара pdftotext да
+ * излезе с грешка, но често с частичен текст — той се ползва; без никакъв
+ * текст грешката се хвърля и файлът минава изцяло през OCR.
+ */
+async function pdfText(path: string, ctx: Ctx): Promise<string[]> {
+  const r = await run(
     "pdftotext",
     ["-enc", "UTF-8", "-eol", "unix", path, "-"],
-    { ...BIG, timeout: 10 * 60_000 },
+    {
+      timeoutMs: timeLeft(ctx),
+    },
   );
-  const pages = stdout.split("\f");
+  if (r.code !== 0 && !r.stdout.trim()) {
+    throw new Error(`pdftotext: ${firstLine(r.stderr) || `код ${r.code}`}`);
+  }
+  const pages = r.stdout.split("\f");
   if (pages.length > 1 && pages[pages.length - 1]!.trim() === "") pages.pop();
   return pages;
 }
 
-async function ocrImage(path: string): Promise<string> {
-  const { stdout } = await pexec(
+async function ocrImage(path: string, ctx: Ctx): Promise<string> {
+  const r = await run(
     "tesseract",
     [path, "stdout", "-l", OCR_LANGS, "--psm", "3"],
     {
-      ...BIG,
-      timeout: 10 * 60_000,
+      timeoutMs: timeLeft(ctx),
       env: { ...process.env, OMP_THREAD_LIMIT: "1" },
     },
   );
-  return stdout;
+  if (r.code !== 0) {
+    throw new Error(`tesseract: ${firstLine(r.stderr) || `код ${r.code}`}`);
+  }
+  return r.stdout;
+}
+
+async function renderPages(
+  path: string,
+  prefix: string,
+  ctx: Ctx,
+  page?: number,
+): Promise<void> {
+  const range = page
+    ? ["-f", String(page), "-l", String(page), "-singlefile"]
+    : [];
+  const r = await run(
+    "pdftoppm",
+    ["-r", String(OCR_DPI), "-gray", "-png", ...range, path, prefix],
+    { timeoutMs: timeLeft(ctx) },
+  );
+  if (r.code !== 0 && page) {
+    throw new Error(`pdftoppm: ${firstLine(r.stderr) || `код ${r.code}`}`);
+  }
 }
 
 async function ocrPdfPage(
   path: string,
   page: number,
   work: string,
+  ctx: Ctx,
 ): Promise<string> {
   const prefix = join(work, `p${page}`);
-  await pexec(
-    "pdftoppm",
-    [
-      "-r",
-      String(OCR_DPI),
-      "-gray",
-      "-png",
-      "-f",
-      String(page),
-      "-l",
-      String(page),
-      "-singlefile",
-      path,
-      prefix,
-    ],
-    { ...BIG, timeout: 10 * 60_000 },
-  );
+  await renderPages(path, prefix, ctx, page);
   const png = `${prefix}.png`;
   try {
-    return await ocrImage(png);
+    return await ocrImage(png, ctx);
   } finally {
     rmSync(png, { force: true });
   }
@@ -301,14 +455,52 @@ interface Pages {
   methods: PageMethod[];
 }
 
+/** Повредено PDF без текстов слой: всяка страница, която се рендерира, → OCR. */
+async function ocrWholePdf(
+  path: string,
+  tools: Tools,
+  work: string,
+  ctx: Ctx,
+  cause: Error,
+): Promise<Pages> {
+  if (!tools.tesseract || !tools.pdftoppm) throw cause;
+  const dir = join(work, "render");
+  mkdirSync(dir, { recursive: true });
+  await renderPages(path, join(dir, "p"), ctx);
+  const pngs = readdirSync(dir)
+    .filter((f) => f.endsWith(".png"))
+    .sort(
+      (a, b) =>
+        Number(/(\d+)\.png$/.exec(a)?.[1]) - Number(/(\d+)\.png$/.exec(b)?.[1]),
+    );
+  if (pngs.length === 0) throw cause;
+  ctx.progress.pages = pngs.length;
+  const pages: string[] = [];
+  for (const [i, f] of pngs.entries()) {
+    ctx.progress.page = i + 1;
+    pages.push(await ocrImage(join(dir, f), ctx));
+    rmSync(join(dir, f), { force: true });
+  }
+  return { pages, methods: pages.map((p) => (p.trim() ? "ocr" : "empty")) };
+}
+
 async function pdfPages(
   path: string,
   tools: Tools,
   work: string,
+  ctx: Ctx,
 ): Promise<Pages> {
-  const pages = await pdfText(path);
+  let pages: string[];
+  try {
+    pages = await pdfText(path, ctx);
+  } catch (e) {
+    if (e instanceof TimeoutError) throw e;
+    return ocrWholePdf(path, tools, work, ctx, e as Error);
+  }
+  ctx.progress.pages = pages.length;
   const methods: PageMethod[] = [];
   for (let i = 0; i < pages.length; i++) {
+    ctx.progress.page = i + 1;
     const text = pages[i]!;
     if (!needsOcr(text)) {
       methods.push("text");
@@ -318,7 +510,7 @@ async function pdfPages(
       methods.push(text.trim() ? "text" : "needs_ocr");
       continue;
     }
-    const ocr = await ocrPdfPage(path, i + 1, work);
+    const ocr = await ocrPdfPage(path, i + 1, work, ctx);
     // OCR печели само ако е дал повече четим текст от текстовия слой
     const ocrScore = ocr.replace(/\s+/g, "").length * readableRatio(ocr);
     const txtScore = text.replace(/\s+/g, "").length * readableRatio(text);
@@ -332,26 +524,71 @@ async function pdfPages(
   return { pages, methods };
 }
 
-async function officeToPdf(path: string, work: string): Promise<string> {
+async function officeToPdf(
+  path: string,
+  work: string,
+  ctx: Ctx,
+): Promise<string> {
   // LibreOffice разпознава формата по разширението; копието е в работната директория
   const src = join(work, `src${extname(path).toLowerCase() || ".doc"}`);
   copyFileSync(path, src);
-  await pexec(
+  const r = await run(
     "soffice",
     [
       `-env:UserInstallation=file://${join(work, "lo-profile")}`,
       "--headless",
+      "--norestore",
       "--convert-to",
       "pdf",
       "--outdir",
       work,
       src,
     ],
-    { ...BIG, timeout: 10 * 60_000 },
+    { timeoutMs: timeLeft(ctx) },
   );
   const out = join(work, "src.pdf");
-  if (!existsSync(out)) throw new Error("LibreOffice не произведе PDF");
+  if (!existsSync(out)) {
+    throw new Error(
+      `LibreOffice не произведе PDF${r.stderr ? `: ${firstLine(r.stderr)}` : ""}`,
+    );
+  }
   return out;
+}
+
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+/** XML/HTML → текст: таговете стават нови редове, същностите се декодират. */
+export function markupText(buf: Buffer): string {
+  const head = buf.subarray(0, 200).toString("latin1");
+  const enc = /encoding\s*=\s*["']([\w-]+)["']/i.exec(head)?.[1]?.toLowerCase();
+  let text: string;
+  try {
+    text = new TextDecoder(enc && enc !== "utf-8" ? enc : "utf-8").decode(buf);
+  } catch {
+    text = buf.toString("utf8");
+  }
+  return text
+    .replace(/^﻿/, "")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]+>/g, "\n")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) =>
+      String.fromCodePoint(parseInt(h, 16)),
+    )
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&(\w+);/g, (m, n: string) => ENTITIES[n.toLowerCase()] ?? m)
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 async function filePages(
@@ -359,20 +596,25 @@ async function filePages(
   kind: Sniffed,
   tools: Tools,
   work: string,
+  ctx: Ctx,
   depth = 0,
 ): Promise<Pages & { entries?: TextMeta["entries"] }> {
   if (kind === "pdf") {
     if (!tools.pdftotext) throw new Error("липсва pdftotext (poppler)");
-    return pdfPages(path, tools, work);
+    return pdfPages(path, tools, work, ctx);
   }
   if (kind === "office") {
     if (!tools.soffice) throw new Error("липсва soffice (LibreOffice)");
-    return pdfPages(await officeToPdf(path, work), tools, work);
+    return pdfPages(await officeToPdf(path, work, ctx), tools, work, ctx);
+  }
+  if (kind === "markup") {
+    const text = markupText(readFileSync(path));
+    return { pages: [text], methods: [text.trim() ? "text" : "empty"] };
   }
   if (kind === "image") {
     if (!tools.tesseract) return { pages: [""], methods: ["needs_ocr"] };
     // многостраничен TIFF: tesseract разделя страниците с \f
-    const text = await ocrImage(path);
+    const text = await ocrImage(path, ctx);
     const pages = text
       .split("\f")
       .filter((p, i, all) => p.trim() || all.length === 1);
@@ -381,7 +623,7 @@ async function filePages(
   if (ARCHIVES.has(kind) && depth === 0) {
     const dir = join(work, "archive");
     mkdirSync(dir, { recursive: true });
-    await unpack(path, kind, tools, dir);
+    await unpack(path, kind, tools, dir, ctx);
     const files = walk(dir).sort();
     const out: Pages & { entries: NonNullable<TextMeta["entries"]> } = {
       pages: [],
@@ -395,7 +637,7 @@ async function filePages(
       if (k === "unsupported" || ARCHIVES.has(k)) continue;
       const sub = join(work, `e${out.entries.length}`);
       mkdirSync(sub, { recursive: true });
-      const r = await filePages(f, k, tools, sub, depth + 1);
+      const r = await filePages(f, k, tools, sub, ctx, depth + 1);
       out.entries.push({
         name: relative(dir, f),
         first_page: out.pages.length + 1,
@@ -412,32 +654,51 @@ async function filePages(
   throw new Error(`неподдържан формат (${kind})`);
 }
 
-/** Разархивира в dir: ZIP с unzip (ако го има), всичко друго — с archiver. */
+/**
+ * Разархивира в dir: ZIP с unzip (ако го има), всичко друго — с първия
+ * разархиватор, който успее. bsdtar не чете „solid" RAR, 7z и unar — да.
+ */
 async function unpack(
   path: string,
   kind: Sniffed,
   tools: Tools,
   dir: string,
+  ctx: Ctx,
 ): Promise<void> {
   if (kind === "zip" && tools.unzip) {
-    await pexec("unzip", ["-qq", "-o", path, "-d", dir], BIG).catch(() => {
-      // unzip излиза с 1 при предупреждения (напр. кодировка на имената)
+    // unzip излиза с 1 при предупреждения (напр. кодировка на имената)
+    const r = await run("unzip", ["-qq", "-o", path, "-d", dir], {
+      timeoutMs: timeLeft(ctx),
     });
-    return;
+    if (r.code === 0 || r.code === 1) return;
   }
-  if (!tools.archiver) {
+  const cmds = archiverCommands(tools);
+  if (cmds.length === 0) {
     throw new Error(
-      `липсва разархиватор за ${kind} (bsdtar, 7z или unar) — macOS: системният tar`,
+      `липсва разархиватор за ${kind} — macOS: brew install sevenzip (или системният tar за не-solid архиви)`,
     );
   }
-  const cmd = tools.archiver.split(":")[0]!;
-  const args =
-    cmd === "7z" || cmd === "7zz"
-      ? ["x", "-y", `-o${dir}`, path]
-      : cmd === "unar"
-        ? ["-q", "-f", "-o", dir, path]
-        : ["-xf", path, "-C", dir];
-  await pexec(cmd, args, { ...BIG, timeout: 10 * 60_000 });
+  const failures: string[] = [];
+  for (const cmd of cmds) {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const args =
+      cmd === "7z" || cmd === "7zz"
+        ? ["x", "-y", "-bd", `-o${dir}`, path]
+        : cmd === "unar"
+          ? ["-q", "-f", "-o", dir, path]
+          : ["-xf", path, "-C", dir];
+    const r = await run(cmd, args, { timeoutMs: timeLeft(ctx) });
+    if (r.code === 0) return;
+    failures.push(`${cmd}: ${firstLine(r.stderr) || `код ${r.code}`}`);
+  }
+  const solid = failures.some((f) => /solid/i.test(f));
+  throw new Error(
+    failures.join(" | ") +
+      (solid && !cmds.some((c) => c !== "bsdtar" && c !== "tar")
+        ? " — за „solid“ RAR: brew install sevenzip"
+        : ""),
+  );
 }
 
 function walk(dir: string): string[] {
@@ -452,18 +713,25 @@ function walk(dir: string): string[] {
 
 function readHead(path: string): Buffer {
   const buf = readFileSync(path);
-  return buf.subarray(0, 16);
+  return buf.subarray(0, 64);
 }
 
 function sha256(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+/** Лимит за един файл по подразбиране: 30 мин. (--file-timeout в минути). */
+const FILE_TIMEOUT_MS = 30 * 60_000;
+
 /** Извлича един файл; връща meta (текстът е записан до нея). */
 export async function extractFile(
   nkrDir: string,
   rec: ManifestRecord,
   tools: Tools,
+  ctx: Ctx = {
+    deadline: Date.now() + FILE_TIMEOUT_MS,
+    progress: { page: 0, pages: 0 },
+  },
 ): Promise<TextMeta> {
   const file = rec.file!;
   const path = join(nkrDir, file);
@@ -491,14 +759,16 @@ export async function extractFile(
     if (kind === "unsupported") {
       meta.status = "unsupported";
     } else {
-      const r = await filePages(path, kind, tools, work);
+      const r = await filePages(path, kind, tools, work, ctx);
       pages = r.pages.map((p) => p.replace(/\f/g, "").replace(/\r\n?/g, "\n"));
       meta.page_methods = r.methods;
       if (r.entries) meta.entries = r.entries;
     }
   } catch (e) {
     meta.status = "error";
-    meta.error = String((e as Error).message ?? e).slice(0, 500);
+    meta.error = `${e instanceof TimeoutError ? "timeout: " : ""}${String(
+      (e as Error).message ?? e,
+    )}`.slice(0, 500);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -511,21 +781,31 @@ export async function extractFile(
   return meta;
 }
 
-function isFresh(nkrDir: string, rec: ManifestRecord): boolean {
+function isFresh(
+  nkrDir: string,
+  rec: ManifestRecord,
+  retryTimeouts: boolean,
+): boolean {
   const metaPath = `${textBase(nkrDir, rec.file!)}.meta.json`;
   if (!existsSync(metaPath)) return false;
   try {
     const meta = JSON.parse(readFileSync(metaPath, "utf8")) as TextMeta;
-    return (
-      meta.version === EXTRACTOR_VERSION &&
-      (!rec.sha256 || meta.source_sha256 === rec.sha256) &&
-      // неподдържан формат или грешка може да мине с по-нова версия на
-      // извличането или с новоинсталиран инструмент — опитват се пак
-      meta.status !== "unsupported" &&
-      meta.status !== "error" &&
-      // без OCR инструменти сканът остава „needs_ocr" — опитваме пак с тях
-      !meta.page_methods.includes("needs_ocr")
-    );
+    if (
+      meta.version !== EXTRACTOR_VERSION ||
+      (rec.sha256 && meta.source_sha256 !== rec.sha256)
+    ) {
+      return false;
+    }
+    // файл, надвишил лимита, не се опитва при всяко пускане (иначе всяко
+    // пускане чака лимита наново) — само с --retry-timeouts
+    if (meta.status === "error" && meta.error?.startsWith("timeout")) {
+      return !retryTimeouts;
+    }
+    // неподдържан формат или грешка може да мине с по-нова версия на
+    // извличането или с новоинсталиран инструмент — опитват се пак
+    if (meta.status === "unsupported" || meta.status === "error") return false;
+    // без OCR инструменти сканът остава „needs_ocr" — опитваме пак с тях
+    return !meta.page_methods.includes("needs_ocr");
   } catch {
     return false;
   }
@@ -544,14 +824,24 @@ export interface ExtractSummary {
 
 export async function runExtract(
   snapshotDir: string,
-  opts: { jobs?: number; force?: boolean; limit?: number; tools?: Tools } = {},
+  opts: {
+    jobs?: number;
+    force?: boolean;
+    limit?: number;
+    tools?: Tools;
+    /** Лимит за един файл, в милисекунди. */
+    fileTimeoutMs?: number;
+    retryTimeouts?: boolean;
+  } = {},
 ): Promise<ExtractSummary> {
   const nkrDir = join(snapshotDir, "nkr_data");
   const tools = opts.tools ?? (await detectTools());
   const all = readManifest(nkrDir).filter(
     (r) => r.status === "ok" && r.file && existsSync(join(nkrDir, r.file)),
   );
-  const pending = opts.force ? all : all.filter((r) => !isFresh(nkrDir, r));
+  const pending = opts.force
+    ? all
+    : all.filter((r) => !isFresh(nkrDir, r, opts.retryTimeouts ?? false));
   const todo = opts.limit != null ? pending.slice(0, opts.limit) : pending;
   const summary: ExtractSummary = {
     files: todo.length,
@@ -567,10 +857,33 @@ export async function runExtract(
   );
   let next = 0;
   let done = 0;
+  const fileTimeoutMs = opts.fileTimeoutMs ?? FILE_TIMEOUT_MS;
+  // файловете в обработка — за съобщение, когато някой работи дълго
+  const active = new Map<number, { name: string; start: number; ctx: Ctx }>();
+  const heartbeat = setInterval(() => {
+    const now = Date.now();
+    for (const a of active.values()) {
+      const min = Math.floor((now - a.start) / 60_000);
+      if (min < 1) continue;
+      const p = a.ctx.progress;
+      console.log(
+        `[extract] … ${a.name} работи от ${min} мин.` +
+          (p.pages ? ` (стр. ${p.page}/${p.pages})` : ""),
+      );
+    }
+  }, 60_000);
+  heartbeat.unref();
+
   const worker = async () => {
     for (let i = next++; i < todo.length; i = next++) {
       const rec = todo[i]!;
-      const meta = await extractFile(nkrDir, rec, tools);
+      const ctx: Ctx = {
+        deadline: Date.now() + fileTimeoutMs,
+        progress: { page: 0, pages: 0 },
+      };
+      active.set(i, { name: basename(rec.file!), start: Date.now(), ctx });
+      const meta = await extractFile(nkrDir, rec, tools, ctx);
+      active.delete(i);
       summary.byStatus[meta.status] = (summary.byStatus[meta.status] ?? 0) + 1;
       for (const m of meta.page_methods) {
         summary.byMethod[m] = (summary.byMethod[m] ?? 0) + 1;
@@ -586,7 +899,11 @@ export async function runExtract(
       }
     }
   };
-  await Promise.all(Array.from({ length: jobs }, worker));
+  try {
+    await Promise.all(Array.from({ length: jobs }, worker));
+  } finally {
+    clearInterval(heartbeat);
+  }
   return summary;
 }
 
@@ -600,7 +917,7 @@ async function main() {
   const local = arg("--local");
   if (!local) {
     console.error(
-      "употреба: pnpm extract --local <dir> [--jobs N] [--force] [--limit N]",
+      "употреба: pnpm extract --local <dir> [--jobs N] [--force] [--limit N] [--file-timeout МИН] [--retry-timeouts]",
     );
     process.exit(2);
   }
@@ -616,7 +933,11 @@ async function main() {
   }
   if (!tools.archiver) {
     console.warn(
-      "[extract] без bsdtar/7z/unar RAR и 7z архивите остават неподдържани (на macOS системният tar е bsdtar)",
+      "[extract] без 7z/unar/bsdtar RAR и 7z архивите остават неподдържани — macOS: brew install sevenzip",
+    );
+  } else if (!/^(7zz|7z|unar):/.test(tools.archiver)) {
+    console.warn(
+      "[extract] само bsdtar: „solid“ RAR архивите няма да се отворят — brew install sevenzip",
     );
   }
   if (!tools.tesseract) {
@@ -626,9 +947,12 @@ async function main() {
   }
   const jobs = arg("--jobs");
   const limit = arg("--limit");
+  const fileTimeout = arg("--file-timeout");
   const summary = await runExtract(local, {
     tools,
     force: process.argv.includes("--force"),
+    retryTimeouts: process.argv.includes("--retry-timeouts"),
+    ...(fileTimeout ? { fileTimeoutMs: Number(fileTimeout) * 60_000 } : {}),
     ...(jobs ? { jobs: Number(jobs) } : {}),
     ...(limit ? { limit: Number(limit) } : {}),
   });

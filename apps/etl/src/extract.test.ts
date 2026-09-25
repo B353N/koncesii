@@ -12,11 +12,14 @@ import { extractDocFacts, normalizeDocText, splitPages } from "ingest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
   detectTools,
+  markupText,
   needsOcr,
   readableRatio,
+  run,
   runExtract,
   sniff,
   textBase,
+  TimeoutError,
   type TextMeta,
   type Tools,
 } from "./extract";
@@ -42,7 +45,14 @@ describe("разпознаване без инструменти", () => {
     expect(sniff(Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]), "")).toBe(
       "7z",
     );
-    expect(sniff(Buffer.from("<html>"), ".html")).toBe("unsupported");
+    expect(sniff(Buffer.from("<html>"), ".html")).toBe("markup");
+    expect(sniff(Buffer.from('<?xml version="1.0"?><a/>'), ".onkr")).toBe(
+      "markup",
+    );
+    expect(sniff(Buffer.from("\xef\xbb\xbf<?xml", "latin1"), ".xml")).toBe(
+      "markup",
+    );
+    expect(sniff(Buffer.from("просто текст"), ".bin")).toBe("unsupported");
   });
 
   test("страница без текст или със „счупен“ шрифт отива на OCR", () => {
@@ -57,6 +67,49 @@ describe("разпознаване без инструменти", () => {
       "/s/nkr_data/text/lot/abc",
     );
   });
+});
+
+describe("изпълнението на инструментите не виси", () => {
+  test("под-процес, който държи изхода отворен, не задържа резултата", async () => {
+    // главният процес свършва веднага, но фоновият `sleep` наследява
+    // stdout — точно така LibreOffice/tesseract „висяха“ безкрайно
+    const t0 = Date.now();
+    const r = await run("sh", ["-c", "(sleep 60) & echo готово"], {
+      timeoutMs: 30_000,
+    });
+    expect(r).toMatchObject({ code: 0 });
+    expect(r.stdout.trim()).toBe("готово");
+    expect(Date.now() - t0).toBeLessThan(10_000);
+  }, 15_000);
+
+  test("надвишеното време убива цялата група процеси", async () => {
+    const t0 = Date.now();
+    await expect(
+      run("sh", ["-c", "sleep 60 & sleep 60"], { timeoutMs: 500 }),
+    ).rejects.toBeInstanceOf(TimeoutError);
+    expect(Date.now() - t0).toBeLessThan(5_000);
+  }, 10_000);
+
+  test("липсващ инструмент е грешка, не увисване", async () => {
+    await expect(
+      run("няма-такава-команда", [], { timeoutMs: 1_000 }),
+    ).rejects.toThrow();
+  });
+});
+
+test("markupText: XML/HTML → текстът между таговете, със същностите", () => {
+  const xml = Buffer.from(
+    '<?xml version="1.0" encoding="UTF-8"?><doc><t>Годишно концесионно възнаграждение: 1 500 лв.</t><!-- бележка --><t>Срок &amp; условия &#8222;x&#8220;</t></doc>',
+  );
+  expect(markupText(xml)).toBe(
+    "Годишно концесионно възнаграждение: 1 500 лв.\nСрок & условия „x“",
+  );
+  const cp1251 = Buffer.concat([
+    Buffer.from('<?xml version="1.0" encoding="windows-1251"?><a>'),
+    Buffer.from([0xf1, 0xf0, 0xee, 0xea]), // „срок“ в windows-1251
+    Buffer.from("</a>"),
+  ]);
+  expect(markupText(cp1251)).toBe("срок");
 });
 
 describe("броячите и повторните опити, без инструменти", () => {
@@ -75,14 +128,17 @@ describe("броячите и повторните опити, без инстр
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(join(nkr, "files", "lot"), { recursive: true });
     const manifest = ["a", "b", "c"].map((id) => {
-      writeFileSync(join(nkr, "files", "lot", `${id}.html`), "<html></html>");
+      writeFileSync(
+        join(nkr, "files", "lot", `${id}.bin`),
+        "\u0000\u0001 не е документ",
+      );
       return JSON.stringify({
         lot_guid: "lot",
         href: `/File/Download/${id}`,
         url: `https://nkr.government.bg/File/Download/${id}`,
         title: id,
         status: "ok",
-        file: `files/lot/${id}.html`,
+        file: `files/lot/${id}.bin`,
       });
     });
     writeFileSync(join(nkr, "files.jsonl"), manifest.join("\n") + "\n");

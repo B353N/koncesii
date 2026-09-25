@@ -248,33 +248,33 @@ export function ConcessionsTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="my-2 w-full min-w-[760px] table-fixed border-collapse text-[13.5px]">
+      <table className="my-2 w-full min-w-[820px] table-fixed border-collapse text-[13.5px] [&_td]:[overflow-wrap:anywhere]">
         <thead>
           <tr className="border-b-[1.5px] border-ink text-left font-mono text-[11.5px] uppercase tracking-wider text-stone">
-            <th scope="col" className="w-[34%] py-2 pr-2 font-medium">
+            <th scope="col" className="w-[31%] py-2 pr-2 font-medium">
               Обект
             </th>
             {showGrantor && (
-              <th scope="col" className="w-[16%] py-2 pr-2 font-medium">
+              <th scope="col" className="w-[15%] py-2 pr-2 font-medium">
                 Концедент
               </th>
             )}
-            <th scope="col" className="w-[22%] py-2 pr-2 font-medium">
+            <th scope="col" className="w-[20%] py-2 pr-2 font-medium">
               Концесионер
             </th>
             <th
               scope="col"
-              className="w-[10%] py-2 pr-2 text-right font-medium"
+              className="w-[14%] py-2 pr-2 text-right font-medium"
             >
               Срок
             </th>
             <th
               scope="col"
-              className="w-[13%] py-2 pr-2 text-right font-medium"
+              className="w-[14%] py-2 pr-2 text-right font-medium"
             >
               Годишно
             </th>
-            <th scope="col" className="w-[5%] py-2 font-medium">
+            <th scope="col" className="w-[6%] py-2 font-medium">
               Инд.
             </th>
           </tr>
@@ -331,7 +331,7 @@ export function ConcessionsTable({
                   </span>
                 )}
               </td>
-              <td className="py-2 pr-2 text-right font-mono tabular-nums whitespace-nowrap">
+              <td className="py-2 pr-2 text-right font-mono tabular-nums">
                 {fmtMonths(r.term_months)}
               </td>
               <td

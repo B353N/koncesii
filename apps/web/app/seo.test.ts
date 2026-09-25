@@ -165,4 +165,9 @@ test("адресът се нормализира до малки букви и �
   );
   expect(normalizePath("/")).toBe("/");
   expect(normalizePath("/koncesii")).toBe("/koncesii");
+  // файловете не се пипат: хешовете на Vite имат главни букви
+  expect(normalizePath("/assets/map-app-B_NFMq7G.js")).toBe(
+    "/assets/map-app-B_NFMq7G.js",
+  );
+  expect(normalizePath("/sitemap-Pages.xml")).toBe("/sitemap-Pages.xml");
 });

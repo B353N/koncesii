@@ -38,6 +38,7 @@ gtag('config', '${GA_ID}');`;
 
 /** Основната навигация: един ред. Останалото е в менюто „Още" и във футъра. */
 const NAV = [
+  [PATHS.home, "Начало"],
   [PATHS.map, "Карта"],
   [PATHS.concessions, "Концесии"],
   [PATHS.municipalities, "Общини"],
@@ -90,7 +91,7 @@ function SearchIcon() {
 }
 
 const navPill = ({ isActive }: { isActive: boolean }) =>
-  `rounded-full px-2.5 py-1.5 text-[14.5px] font-semibold whitespace-nowrap no-underline xl:px-3 ${
+  `rounded-full px-1.5 py-1.5 text-[14px] font-semibold whitespace-nowrap no-underline xl:px-3 xl:text-[14.5px] ${
     isActive ? "bg-ink text-white" : "text-ink hover:bg-paper"
   }`;
 

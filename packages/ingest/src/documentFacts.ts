@@ -41,6 +41,8 @@ export interface DocFact {
   priority: number;
   /** Позиция в нормализирания текст на страницата — за стабилна подредба. */
   offset: number;
+  /** Парите: „с ДДС" / „без ДДС" веднага след сумата, ако е казано. */
+  vat: "with" | "without" | null;
 }
 
 export interface DocAmount {
@@ -63,7 +65,7 @@ export function normalizeDocText(text: string): string {
   return text
     .normalize("NFKC")
     .replace(/(\p{L})-[ \t]*\r?\n[ \t]*(\p{Ll})/gu, "$1$2")
-    .replace(/[\s ­]+/g, " ")
+    .replace(/[\s\u00a0\u00ad]+/g, " ")
     .trim();
 }
 
@@ -78,11 +80,13 @@ export function splitPages(text: string): string[] {
 // ── Числа и пари ─────────────────────────────────────────────────────────
 
 /**
- * „2 300,81" / „1.500,00" / „1,500.00" / „2300.81" / „15000". Интервал или
- * точка като разделител на хилядите, запетая като десетичен знак (БДС).
+ * „2 300,81" / „1.500,00" / „1,500.00" / „2300.81" / „127 114.36" /
+ * „15000". Интервал или точка като разделител на хилядите, запетая (или
+ * точка след групи с интервал) като десетичен знак.
  */
 const NUM =
-  String.raw`\d{1,3}(?:[  .]\d{3})+(?:,\d{1,2})?` +
+  String.raw`\d{1,3}(?:[ \u00a0]\d{3})+(?:[.,]\d{1,2})?` +
+  String.raw`|\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?` +
   String.raw`|\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?` +
   String.raw`|\d+(?:[.,]\d{1,2})?`;
 const MULT = String.raw`хил(?:\.|яди)?|млн\.?|милиона?`;
@@ -90,10 +94,29 @@ const MULT = String.raw`хил(?:\.|яди)?|млн\.?|милиона?`;
 const WORDS = String.raw`\([^()]{0,200}\)`;
 const CURRENCY = String.raw`лв\.?|лева|bgn|евро|eur|€`;
 
+/**
+ * Число не започва веднага след „цифра + интервал": „1312 500 лв." е
+ * грешно групирано число, не сума от 500 лв. — такова число се пропуска.
+ */
 const MONEY_RE = new RegExp(
-  String.raw`(?<![\d.,])(${NUM})\s*(?:(${MULT})\s*)?(?:${WORDS}\s*)?(${CURRENCY})(?![\p{L}])`,
+  String.raw`(?<![\d.,])(?<!\d[ \u00a0])(${NUM})\s*(?:(${MULT})\s*)?(?:${WORDS}\s*)?(${CURRENCY})(?![\p{L}])`,
   "giu",
 );
+
+/** „с ДДС" / „без ДДС" до 60 знака след сумата, в същото изречение. */
+const VAT_WITH_RE = /^[^.;]{0,60}?(?<!\p{L})с\s+(?:включен\s+|вкл\.\s*)?ДДС/iu;
+const VAT_WITHOUT_RE =
+  /^[^.;]{0,60}?(?<!\p{L})без\s+(?:включен\s+|вкл\.\s*)?ДДС/iu;
+
+function vatAfter(text: string, end: number): "with" | "without" | null {
+  const tail = text.slice(end, end + 80);
+  const w = VAT_WITH_RE.exec(tail);
+  const wo = VAT_WITHOUT_RE.exec(tail);
+  // първото споменаване печели: „1600 лв. без ДДС, съответно 1920 лв. с ДДС"
+  if (w && (!wo || w[0].length < wo[0].length)) return "with";
+  if (wo) return "without";
+  return null;
+}
 
 /** Цена на единица (лв./кв.м, лв. на тон) не е обща сума. */
 const PER_UNIT_RE =
@@ -101,7 +124,7 @@ const PER_UNIT_RE =
 
 /** Число в документен формат → стойност. Хилядите: интервал, точка или запетая по три. */
 export function parseDocNumber(raw: string): number | null {
-  const s = raw.replace(/[\s ]/g, "");
+  const s = raw.replace(/[\s\u00a0]/g, "");
   let norm: string;
   if (/^\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/.test(s)) {
     norm = s.replaceAll(".", "").replace(",", ".");
@@ -131,6 +154,7 @@ interface MoneyMatch {
   start: number;
   end: number;
   perUnit: boolean;
+  vat: "with" | "without" | null;
 }
 
 function moneyMatches(text: string): MoneyMatch[] {
@@ -150,6 +174,7 @@ function moneyMatches(text: string): MoneyMatch[] {
       start: m.index,
       end,
       perUnit: PER_UNIT_RE.test(text.slice(end, end + 25)),
+      vat: vatAfter(text, end),
     });
   }
   return out;
@@ -158,7 +183,8 @@ function moneyMatches(text: string): MoneyMatch[] {
 // ── Срокове и проценти ───────────────────────────────────────────────────
 
 const TERM_RE = new RegExp(
-  String.raw`(?<![\d.,])(\d{1,4})\s*(?:${WORDS}\s*)?(години|година|год\.|г\.|месеца|месец|мес\.)(?![\p{L}])`,
+  // „[360] месеца" — формулярите на НКР слагат числото в квадратни скоби
+  String.raw`(?<![\d.,])\[?(\d{1,4})\]?\s*(?:${WORDS}\s*)?(години|година|год\.|г\.|месеца|месец|мес\.)(?![\p{L}])`,
   "iu",
 );
 
@@ -248,10 +274,18 @@ const WINDOW = 260;
  * цена, гаранции и неустойки.
  */
 /** Точно преди котвата: „Минималното годишно …", „максималният срок …". */
-const SKIP_BEFORE_ANCHOR_RE = /(?:минимал|максимал)\p{L}*\s+$/iu;
+const SKIP_BEFORE_ANCHOR_RE =
+  /(?:(?:минимал|максимал)\p{L}*|(?:удълж|продълж)\p{L}*(?:\s+\p{L}+){0,2})\s+$/iu;
 
 const SKIP_PREFIX_RE =
-  /не\s+може|по-дълъг|по-кратък|максимал|минимал|не\s+по-малк|удължав|продължав|изтичане|гаранци|неустойк|депозит|лихв|санкци|обезпечени/iu;
+  /не\s+може|по-дълъг|по-кратък|максимал|минимал|не\s+по-малк|удълж|продълж|изтичане|гаранци|неустойк|депозит|лихв|санкци|обезпечени/iu;
+
+/** „Срок на концесията, без предвидените удължавания: [360] месеца" не е удължаване. */
+const NOT_AN_EXTENSION_RE = /без\s+(?:\p{L}+\s+)?удължавани\p{L}*/giu;
+
+function skipPrefix(prefix: string): boolean {
+  return SKIP_PREFIX_RE.test(prefix.replace(NOT_AN_EXTENSION_RE, ""));
+}
 
 /** Годишното, когато котвата е общата: „… в размер на 5 000 лв. годишно". */
 const ANNUAL_HINT_RE =
@@ -331,7 +365,7 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
 
         if (
           SKIP_BEFORE_ANCHOR_RE.test(
-            text.slice(Math.max(0, aStart - 30), aStart),
+            text.slice(Math.max(0, aStart - 40), aStart),
           )
         ) {
           continue;
@@ -354,7 +388,7 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
           const t = TERM_RE.exec(win);
           if (!t) continue;
           const prefix = win.slice(0, t.index);
-          if (SKIP_PREFIX_RE.test(prefix) || /(?:^|\s)до\s*$/iu.test(prefix)) {
+          if (skipPrefix(prefix) || /(?:^|\s)до\s*$/iu.test(prefix)) {
             continue;
           }
           const n = Number(t[1]);
@@ -370,6 +404,7 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
             eur: null,
             months,
             percent: null,
+            vat: null,
             quote: quoteAround(text, aStart, end),
             offset: start,
           });
@@ -385,7 +420,7 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
           (!money || pct.index < money.start)
         ) {
           const prefix = win.slice(0, pct.index);
-          if (!SKIP_PREFIX_RE.test(prefix)) {
+          if (!skipPrefix(prefix)) {
             const start = aEnd + pct.index;
             const end = start + pct[0].length;
             const percent = Number(pct[1]!.replace(",", "."));
@@ -398,6 +433,7 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
                 eur: null,
                 months: null,
                 percent,
+                vat: null,
                 quote: quoteAround(text, aStart, end),
                 offset: start,
               });
@@ -407,7 +443,7 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
         }
         if (!money) continue;
         const prefix = win.slice(0, money.start);
-        if (SKIP_PREFIX_RE.test(prefix)) continue;
+        if (skipPrefix(prefix)) continue;
         if (
           anchor.field === "annual_payment" &&
           anchor.priority === 2 &&
@@ -425,6 +461,7 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
           eur: money.eur,
           months: null,
           percent: null,
+          vat: money.vat,
           quote: quoteAround(text, aStart, end),
           offset: start,
         });

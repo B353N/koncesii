@@ -49,7 +49,8 @@ test("обявлението обогатява концесията; всяка
   expect(c["term_months"]).toBe(420);
   expect(c["term_flag"]).toBe("ok");
   expect(c["annual_payment_raw"]).toBe("259,75 лв.");
-  expect(c["annual_payment_eur"]).toBeCloseTo(259.75 / 1.95583, 2);
+  // НКР формулярите са в евро въпреки „лв." (nkrMoney в unify.ts)
+  expect(c["annual_payment_eur"]).toBe(259.75);
   expect(c["value_raw"]).toBe("41 967,34 лв.");
   // „Няма въведени данни“ в обявлението → попълнено от договора (виж по-долу)
   expect(c["onetime_payment_flag"]).toBe("parsed_from_text");
@@ -74,7 +75,7 @@ test("флаговете са аритметични факти с формул�
   ]);
   const low = JSON.parse(flags[2]!.inputs) as Record<string, number>;
   expect(low["ratio"]).toBeLessThan(0.01);
-  expect(low["annual_payment_eur"]).toBeCloseTo(259.75 / 1.95583, 2);
+  expect(low["annual_payment_eur"]).toBe(259.75);
   const long = JSON.parse(flags[1]!.inputs) as Record<string, number>;
   expect(long["term_months"]).toBe(420);
   expect(long["level"]).toBe(2); // ≥ 420 месеца
@@ -333,8 +334,8 @@ test("всички суми от документите, със страница
     .all();
   db.close();
   expect(amounts).toMatchObject([
-    { value_raw: expect.stringContaining("41 967,34"), page: 1 },
-    { value_raw: expect.stringContaining("259,75"), page: 2 },
+    { value_raw: expect.stringContaining("82 080,98"), page: 1 },
+    { value_raw: expect.stringContaining("508,03"), page: 2 },
     { value_raw: "1 500 лв.", page: 2 },
     { value_raw: "1 000 лв.", page: 2 },
   ]);

@@ -172,7 +172,7 @@ describe.skipIf(!canPdf)("pnpm extract върху фикстурите", () => {
     expect(meta.page_methods).toEqual(["ocr"]);
     const facts = extractDocFacts(splitPages(text));
     expect(facts.find((f) => f.field === "annual_payment")).toMatchObject({
-      amount: 259.75,
+      amount: 508.03,
       currency: "BGN",
     });
   });

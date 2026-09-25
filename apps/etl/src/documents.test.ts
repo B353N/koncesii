@@ -80,6 +80,18 @@ test("превалутирането на същата сума не е разм
   expect(r).toMatchObject({ agrees: 1, conflicts: 0 });
 });
 
+test("сумата с ДДС в договора съвпада с регистъра без ДДС", () => {
+  // регистър: 51,13 € (без ДДС) = 100 лв.; договор: 120 лв. с ДДС
+  const r = applyFacts(
+    db,
+    candidates(
+      "Годишното концесионно възнаграждение е 120 лв. (сто и двадесет лева) с ДДС.",
+    ),
+    "2026-07-08",
+  );
+  expect(r).toMatchObject({ agrees: 1, conflicts: 0 });
+});
+
 test("процентът от приходите се пази за показване, не попълва колона", () => {
   applyFacts(
     db,
@@ -96,4 +108,16 @@ test("процентът от приходите се пази за показв
     percent: 4,
     outcome: "display",
   });
+});
+
+test("nkrMoney: сумата от формуляра на НКР е в евро въпреки „лв.“", async () => {
+  const { nkrMoney } = await import("./unify");
+  // реален случай: 1 027,70 „лв." в регистъра = 2 010 лв. в договора
+  expect(nkrMoney("Да Размер (BGN без ДДС): 1 027,70 лв.")).toMatchObject({
+    raw: "Да Размер (BGN без ДДС): 1 027,70 лв.",
+    currency: "EUR",
+    eur: 1027.7,
+  });
+  expect(nkrMoney("500 евро")).toMatchObject({ currency: "EUR", eur: 500 });
+  expect(nkrMoney("Няма въведени данни")).toMatchObject({ flag: "missing" });
 });

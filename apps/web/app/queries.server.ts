@@ -2,13 +2,18 @@ import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { getDb } from "./db.server";
 import {
+  CONCESSION_KIND_LABELS,
   FACT_ORDER,
   KIND_LABELS,
   SEVERITY_RANK,
   shortObjectTitle,
 } from "./format";
 import { buildUrlIndex, type UrlIndex } from "./slug";
-import { concessionUrlText } from "./seo";
+import {
+  concessionHeadline,
+  concessionPageTitle,
+  concessionUrlText,
+} from "./seo";
 import { grantorSlug } from "./paths";
 
 /**
@@ -67,47 +72,89 @@ const LIST_SQL = `SELECT ${LIST_COLS} ${LIST_FROM}`;
 type ListRow = Omit<ConcessionRow, "slug">;
 
 /**
- * Индексът номер ↔ адрес се строи веднъж за отворената база (WeakMap по
- * handle: при атомарна подмяна на файла getDb() връща нов handle и
- * индексът се престроява). Адресът е описание + номер (slug.ts).
+ * Индексът номер ↔ адрес и заглавията на партидите се строят веднъж за
+ * отворената база (WeakMap по handle: при атомарна подмяна на файла
+ * getDb() връща нов handle и индексът се престроява). Адресът е
+ * описание + номер (slug.ts); заглавието е обектът и общината (seo.ts).
  */
-const slugIndexes = new WeakMap<Database.Database, UrlIndex>();
+interface ConcessionIndex {
+  urls: UrlIndex;
+  headline: Map<string, string>;
+  /** заглавия, които се падат на повече от една партида */
+  duplicate: Set<string>;
+}
+const concessionIndexes = new WeakMap<Database.Database, ConcessionIndex>();
+function concessionIndex(db: Database.Database): ConcessionIndex {
+  let ci = concessionIndexes.get(db);
+  if (ci) return ci;
+  const rows = db
+    .prepare<
+      [],
+      {
+        reg_num: string;
+        title: string | null;
+        ckind: string | null;
+        grantor: string | null;
+        kind: string | null;
+        description: string | null;
+        municipality: string | null;
+      }
+    >(
+      `SELECT c.reg_num, c.title, c.kind AS ckind, g.name AS grantor,
+              (SELECT o.kind FROM objects o WHERE o.concession_id = c.id
+                ORDER BY o.seq LIMIT 1) AS kind,
+              (SELECT o.description FROM objects o WHERE o.concession_id = c.id
+                ORDER BY o.seq LIMIT 1) AS description,
+              (SELECT o.municipality FROM objects o WHERE o.concession_id = c.id
+                AND o.municipality IS NOT NULL ORDER BY o.seq LIMIT 1) AS municipality
+         FROM concessions c LEFT JOIN grantors g ON g.id = c.grantor_id`,
+    )
+    .all();
+  const headline = new Map<string, string>();
+  const seen = new Set<string>();
+  const duplicate = new Set<string>();
+  const texts = rows.map((r) => {
+    const parts = {
+      title: r.title,
+      kindLabel: r.kind ? (KIND_LABELS[r.kind] ?? null) : null,
+      concessionKindLabel: r.ckind
+        ? (CONCESSION_KIND_LABELS[r.ckind] ?? null)
+        : null,
+      objectDescription: r.description,
+      grantorName: r.grantor,
+      municipality: r.municipality,
+    };
+    const h = concessionHeadline(parts);
+    headline.set(r.reg_num, h);
+    if (seen.has(h)) duplicate.add(h);
+    seen.add(h);
+    return { reg_num: r.reg_num, text: concessionUrlText(parts) };
+  });
+  ci = { urls: buildUrlIndex(texts), headline, duplicate };
+  concessionIndexes.set(db, ci);
+  return ci;
+}
 function slugIndex(db: Database.Database): UrlIndex {
-  let idx = slugIndexes.get(db);
-  if (!idx) {
-    const rows = db
-      .prepare<
-        [],
-        {
-          reg_num: string;
-          title: string | null;
-          grantor: string | null;
-          kind: string | null;
-          municipality: string | null;
-        }
-      >(
-        `SELECT c.reg_num, c.title, g.name AS grantor,
-                (SELECT o.kind FROM objects o WHERE o.concession_id = c.id
-                  ORDER BY o.seq LIMIT 1) AS kind,
-                (SELECT o.municipality FROM objects o WHERE o.concession_id = c.id
-                  AND o.municipality IS NOT NULL ORDER BY o.seq LIMIT 1) AS municipality
-           FROM concessions c LEFT JOIN grantors g ON g.id = c.grantor_id`,
-      )
-      .all();
-    idx = buildUrlIndex(
-      rows.map((r) => ({
-        reg_num: r.reg_num,
-        text: concessionUrlText({
-          title: r.title,
-          kindLabel: r.kind ? KIND_LABELS[r.kind] : null,
-          grantorName: r.grantor,
-          municipality: r.municipality,
-        }),
-      })),
-    );
-    slugIndexes.set(db, idx);
-  }
-  return idx;
+  return concessionIndex(db).urls;
+}
+
+/** H1 и <title> на партида (seo.ts), с номера само при дубликат. */
+export function concessionTitles(
+  regNum: string,
+): { headline: string; pageTitle: string } | null {
+  const db = getDb();
+  if (!db) return null;
+  const ci = concessionIndex(db);
+  const headline = ci.headline.get(regNum);
+  if (!headline) return null;
+  return {
+    headline,
+    pageTitle: concessionPageTitle(
+      headline,
+      regNum,
+      ci.duplicate.has(headline),
+    ),
+  };
 }
 
 function withSlugs<T extends { reg_num: string }>(
@@ -336,6 +383,13 @@ export interface ObjectRow {
   description: string;
   kind: string;
   kind_raw: string | null;
+  oblast: string | null;
+  municipality: string | null;
+  place: string | null;
+  lat: number | null;
+  lon: number | null;
+  /** 'settlement' | 'municipality' - точката е центроид, приблизителна */
+  geo_precision: string | null;
 }
 
 export interface PaymentRow {
@@ -391,7 +445,9 @@ export function getConcession(regNum: string): ConcessionDetail | null {
     concessionaire,
     objects: db
       .prepare<[string], ObjectRow>(
-        "SELECT id, description, kind, kind_raw FROM objects WHERE concession_id = ? ORDER BY seq",
+        `SELECT id, description, kind, kind_raw, oblast, municipality, place,
+                lat, lon, geo_precision
+           FROM objects WHERE concession_id = ? ORDER BY seq`,
       )
       .all(id),
     documents: documentRows(db, id),

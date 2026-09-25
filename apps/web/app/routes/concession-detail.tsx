@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link, redirect } from "react-router";
 import type { Route } from "./+types/concession-detail";
 import {
@@ -16,6 +17,7 @@ import {
   FACT_OUTCOMES,
   FLAG_CONDITIONS,
   FLAG_DESCRIPTIONS,
+  FLAG_SHORT,
   fmtDocumentMeta,
   fmtEur,
   fmtFact,
@@ -24,6 +26,7 @@ import {
   KIND_LABELS,
 } from "../format";
 import {
+  concessionTitles,
   getConcession,
   relatedConcessions,
   resolveConcession,
@@ -33,62 +36,42 @@ import { concessionHref } from "../slug";
 import {
   absUrl,
   clampDescription,
-  concessionTitle,
   pageTitle,
+  regLabel,
   sentence,
 } from "../seo";
 import { breadcrumbJsonLd, concessionJsonLd, jsonLdScript } from "../jsonLd";
 import { companyHref, documentHref, grantorHref, PATHS } from "../paths";
-
-/** Заглавието на страницата: регистровото, допълнено с вид и концедент. */
-function titleOf(detail: ConcessionDetail): string {
-  const c = detail.concession;
-  return concessionTitle({
-    title: c.title,
-    regNum: c.reg_num,
-    kindLabel: detail.objects[0]
-      ? (KIND_LABELS[detail.objects[0].kind] ?? null)
-      : null,
-    objectDescription: detail.objects[0]?.description ?? null,
-    grantorName: detail.grantor?.name ?? null,
-    concessionKindLabel: c.kind
-      ? (CONCESSION_KIND_LABELS[c.kind] ?? null)
-      : null,
-  });
-}
 
 /**
  * Описанието се сглобява от фактите в базата: вид, страни, срок,
  * възнаграждение, статус. Липсващ факт просто отпада - нищо не се
  * попълва по предположение.
  */
-function descriptionOf(detail: ConcessionDetail): string {
+function descriptionOf(detail: ConcessionDetail, headline: string): string {
   const c = detail.concession;
-  const kind = detail.objects[0]
-    ? (KIND_LABELS[detail.objects[0].kind] ?? null)
-    : null;
+  const who = detail.concessionaire
+    ? `концесионер ${detail.concessionaire.name}${
+        detail.concessionaire.eik ? ` (ЕИК ${detail.concessionaire.eik})` : ""
+      }`
+    : "концесионерът не е вписан";
   return clampDescription(
     sentence([
-      kind ? `${kind}:` : "Концесия:",
-      detail.grantor ? `концедент ${detail.grantor.name},` : null,
-      detail.concessionaire
-        ? `концесионер ${detail.concessionaire.name}${
-            detail.concessionaire.eik
-              ? ` (ЕИК ${detail.concessionaire.eik})`
-              : ""
-          }.`
-        : null,
+      // номерът е отпред: при еднакви факти описанието пак е уникално
+      `${headline}, партида ${regLabel(c.reg_num)}:`,
+      `${who}${detail.grantor ? `, концедент ${detail.grantor.name}` : ""}.`,
       c.term_months != null ? `Срок ${fmtMonths(c.term_months)}.` : null,
       c.annual_payment_eur != null
         ? `Годишно възнаграждение ${fmtEur(c.annual_payment_eur)}.`
         : null,
       c.status ? `Статус: ${c.status.toLowerCase()}.` : null,
       detail.flags.length
-        ? `${detail.flags.length} ${
-            detail.flags.length === 1 ? "индикатор" : "индикатора"
-          } за риск.`
+        ? `Индикатори: ${detail.flags
+            .map((f) => FLAG_SHORT[f.code] ?? f.code)
+            .join(", ")
+            .toLowerCase()}.`
         : null,
-      `Партида ${c.reg_num}, проследима до официалния регистър.`,
+      "Данни от Националния концесионен регистър.",
     ]),
   );
 }
@@ -96,9 +79,10 @@ function descriptionOf(detail: ConcessionDetail): string {
 export function meta({ loaderData }: Route.MetaArgs) {
   const detail =
     loaderData && "detail" in loaderData ? loaderData.detail : null;
-  if (!detail) return [{ title: pageTitle("Концесия") }];
-  const title = titleOf(detail);
-  const description = descriptionOf(detail);
+  if (!detail || !loaderData || !("titles" in loaderData))
+    return [{ title: pageTitle("Концесия") }];
+  const title = loaderData.titles.pageTitle;
+  const description = descriptionOf(detail, loaderData.titles.headline);
   const url = absUrl(concessionHref(detail.slug));
   return [
     { title: pageTitle(title) },
@@ -117,9 +101,10 @@ export function loader({ params }: Route.LoaderArgs) {
   // Суров номер или отрязан на "#" адрес → каноничният slug.
   if (hit.slug !== params.slug) throw redirect(concessionHref(hit.slug), 301);
   const detail = getConcession(hit.reg_num);
-  if (!detail) throw new Response("Not Found", { status: 404 });
+  const titles = concessionTitles(hit.reg_num);
+  if (!detail || !titles) throw new Response("Not Found", { status: 404 });
 
-  return { detail, related: relatedConcessions(hit.reg_num) };
+  return { detail, titles, related: relatedConcessions(hit.reg_num) };
 }
 
 /**
@@ -239,11 +224,109 @@ function fmtInputs(inputs: Record<string, unknown>): string {
     .join("  ·  ");
 }
 
-export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
-  const { detail, related } = loaderData;
+/**
+ * Въпросите, с които хората търсят една концесия, и отговорите от
+ * вписаните факти. Липсващ факт дава отговор „не е вписано" - това също
+ * е информация за регистъра, а не празно място за догадки.
+ */
+function Answers({
+  detail,
+  headline,
+}: {
+  detail: ConcessionDetail;
+  headline: string;
+}) {
   const c = detail.concession;
-  const heading = titleOf(detail);
-  const description = descriptionOf(detail);
+  const who = detail.concessionaire;
+  const items: Array<[string, ReactNode]> = [
+    [
+      `Кой е концесионерът на ${headline}?`,
+      who ? (
+        <>
+          {who.eik ? (
+            <Link
+              to={companyHref(who.name, who.eik)}
+              className="font-semibold text-water underline underline-offset-2"
+            >
+              {who.name}
+            </Link>
+          ) : (
+            <b>{who.name}</b>
+          )}
+          {who.eik ? `, ЕИК ${who.eik}` : ""}.
+        </>
+      ) : (
+        "В регистъра не е вписан концесионер."
+      ),
+    ],
+    [
+      "Кой е отдал концесията?",
+      detail.grantor ? (
+        <>
+          Концедент е{" "}
+          <Link
+            to={grantorHref(detail.grantor.id.slice(3))}
+            className="font-semibold text-water underline underline-offset-2"
+          >
+            {detail.grantor.name}
+          </Link>
+          .
+        </>
+      ) : (
+        "Концедентът не е вписан."
+      ),
+    ],
+    [
+      "За колко години е концесията?",
+      c.term_months != null
+        ? `Срокът е ${fmtMonths(c.term_months)}${c.status ? `; статус в регистъра: ${c.status.toLowerCase()}` : ""}.`
+        : "Срокът не е вписан в регистъра.",
+    ],
+    [
+      "Колко плаща концесионерът?",
+      c.annual_payment_eur != null || c.onetime_payment_eur != null
+        ? [
+            c.annual_payment_eur != null
+              ? `Годишното възнаграждение е ${fmtEur(c.annual_payment_eur)}`
+              : null,
+            c.onetime_payment_eur != null
+              ? `еднократното е ${fmtEur(c.onetime_payment_eur)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(", ") + ", по данните в регистъра."
+        : "В регистъра не е вписано възнаграждение.",
+    ],
+  ];
+  if (detail.flags.length)
+    items.push([
+      "Има ли индикатори за риск?",
+      `Да: ${detail.flags
+        .map((f) => FLAG_SHORT[f.code] ?? f.code)
+        .join(", ")
+        .toLowerCase()}. Индикаторът е аритметичен факт по публичната методология, не обвинение.`,
+    ]);
+  return (
+    <section className="mt-6 border-t border-limestone pt-5">
+      <h2 className="font-display text-lg font-bold">Въпроси и отговори</h2>
+      <div className="mt-3 grid max-w-[72ch] gap-3.5">
+        {items.map(([q, a]) => (
+          <div key={q}>
+            <h3 className="font-bold">{q}</h3>
+            <p className="mt-0.5 text-ink/90">{a}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
+  const { detail, titles, related } = loaderData;
+  const c = detail.concession;
+  const heading = titles.headline;
+  const description = descriptionOf(detail, heading);
+  const place = detail.objects.find((o) => o.municipality || o.lat != null);
   // Регистровата стойност никога не изчезва: ако заглавието на страницата
   // се различава от нея (родово или отрязано), показваме я дословно.
   const rawSubject =
@@ -281,9 +364,18 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
           breadcrumbJsonLd(crumbs),
           concessionJsonLd({
             url: absUrl(concessionHref(detail.slug)),
-            name: heading,
+            name: titles.pageTitle,
             description,
             regNum: c.reg_num,
+            place: place
+              ? {
+                  name: place.place ?? place.municipality ?? null,
+                  municipality: place.municipality,
+                  oblast: place.oblast,
+                  lat: place.lat,
+                  lon: place.lon,
+                }
+              : null,
             sourceUrl: c.source_url,
             fetchedAt: c.fetched_at,
             grantorName: detail.grantor?.name ?? null,
@@ -642,6 +734,8 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
           <p className="pb-2 text-stone">Няма приложени документи.</p>
         )}
       </Razdel>
+
+      <Answers detail={detail} headline={heading} />
 
       {(related.byGrantor.length > 0 || related.byKind.length > 0) && (
         <section className="mt-6 grid gap-8 border-t border-limestone pt-5 md:grid-cols-2">

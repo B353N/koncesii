@@ -7,7 +7,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // setWorkerUrl преди първата карта. Същият origin → покрива се от
 // worker-src 'self' в CSP (entry.server.tsx).
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import { FLAG_DESCRIPTIONS, KIND_LABELS } from "./format";
+import { FLAG_DESCRIPTIONS, FLAG_SHORT, KIND_LABELS } from "./format";
 import {
   BASEMAP_STYLE,
   BG_BOUNDS,
@@ -20,17 +20,6 @@ import type { MapPoint } from "./queries.server";
 import { concessionHref } from "./slug";
 import { companyHref, PATHS } from "./paths";
 
-/** Кратките имена на индикаторите за флагчетата в списъка. */
-export const FLAG_SHORT: Record<string, string> = {
-  LOW_PAYMENT: "Ниско възнаграждение",
-  SINGLE_BIDDER: "Един участник",
-  YOUNG_COMPANY: "Нова компания",
-  LONG_TERM: "Дълъг срок",
-  GRACE_PERIOD: "Гратисен период",
-  NO_INDEXATION: "Без индексация",
-  MISSING_MONEY: "Без вписана сума",
-  DATA_CONFLICT: "Противоречие в данните",
-};
 const FLAG_SEV: Record<string, number> = {
   LOW_PAYMENT: 3,
   SINGLE_BIDDER: 3,

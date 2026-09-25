@@ -7,12 +7,13 @@ import { concessionHref } from "../slug";
 import { DataPending } from "../components";
 import {
   FLAG_DESCRIPTIONS,
+  FLAG_SHORT,
   fmtMonths,
   fmtPercent,
   KIND_LABELS,
   SEVERITY_RANK,
 } from "../format";
-import { FLAG_SHORT, FlagPin, MapApp } from "../map-app";
+import { FlagPin, MapApp } from "../map-app";
 import type { RouteHandle } from "../root";
 import {
   flagCodeCounts,

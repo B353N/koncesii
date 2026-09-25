@@ -78,6 +78,38 @@ export interface ConcessionJsonLdInput {
   concessionaireName: string | null;
   concessionaireEik: string | null;
   concessionaireUrl: string | null;
+  /** Мястото на обекта; координатите са центроид (приблизителни). */
+  place?: {
+    name: string | null;
+    municipality: string | null;
+    oblast: string | null;
+    lat: number | null;
+    lon: number | null;
+  } | null;
+}
+
+function placeJsonLd(p: NonNullable<ConcessionJsonLdInput["place"]>): JsonLd {
+  return {
+    "@type": "Place",
+    ...(p.name ? { name: p.name } : {}),
+    address: {
+      "@type": "PostalAddress",
+      ...(p.municipality
+        ? { addressLocality: `община ${p.municipality}` }
+        : {}),
+      ...(p.oblast ? { addressRegion: `област ${p.oblast}` } : {}),
+      addressCountry: "BG",
+    },
+    ...(p.lat != null && p.lon != null
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: p.lat,
+            longitude: p.lon,
+          },
+        }
+      : {}),
+  };
 }
 
 export function concessionJsonLd(c: ConcessionJsonLdInput): JsonLd {
@@ -122,6 +154,7 @@ export function concessionJsonLd(c: ConcessionJsonLdInput): JsonLd {
     dateModified: c.fetchedAt,
     isPartOf: { "@id": `${SITE}/#website` },
     ...(about.length ? { about } : {}),
+    ...(c.place ? { spatialCoverage: placeJsonLd(c.place) } : {}),
   };
 }
 

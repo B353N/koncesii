@@ -262,3 +262,15 @@ export function shortObjectTitle(title: string): string {
   const cut = head.slice(0, 110);
   return cut.slice(0, Math.max(60, cut.lastIndexOf(" "))) + "…";
 }
+
+/** Кратките имена на индикаторите за флагчетата в списъка. */
+export const FLAG_SHORT: Record<string, string> = {
+  LOW_PAYMENT: "Ниско възнаграждение",
+  SINGLE_BIDDER: "Един участник",
+  YOUNG_COMPANY: "Нова компания",
+  LONG_TERM: "Дълъг срок",
+  GRACE_PERIOD: "Гратисен период",
+  NO_INDEXATION: "Без индексация",
+  MISSING_MONEY: "Без вписана сума",
+  DATA_CONFLICT: "Противоречие в данните",
+};

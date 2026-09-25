@@ -62,7 +62,8 @@ pnpm db:push
 ```
 
 Инструментите за стъпка 2 се слагат веднъж: `brew install poppler tesseract
-tesseract-lang` и `brew install --cask libreoffice` (Word/RTF документите). Без
+tesseract-lang sevenzip` и `brew install --cask libreoffice` (Word/RTF документите;
+`sevenzip` — за „solid“ RAR архивите). Без
 tesseract сканираните страници остават без текст и се опитват отново при следващото
 пускане.
 

@@ -147,6 +147,20 @@ interface EgovRow {
   row_number?: string | null;
 }
 
+/**
+ * Сумите във формулярите на НКР са в евро, въпреки етикета „Размер (BGN без
+ * ДДС): … лв.". Регистърът ги е превалутирал по 1,95583 при въвеждането на
+ * еврото, без да смени етикета — проверено на 25.09.2026 срещу прикачените
+ * договори: 1 027,70 „лв." в регистъра = 2 010 лв. в договора, 4 899 710,10 =
+ * 9 583 000 лв. и т.н. Затова число с „лв." от формуляр се чете като евро;
+ * суровият низ не се пипа. Изрично „евро" си остава евро.
+ */
+export function nkrMoney(raw: unknown): ReturnType<typeof parseMoney> {
+  const m = parseMoney(raw);
+  if (m.currency !== "BGN" || m.value == null) return m;
+  return { ...m, currency: "EUR", eur: Math.round(m.value * 100) / 100 };
+}
+
 export interface UnifyStats {
   concessions: number;
   fromNkr: number;
@@ -301,9 +315,9 @@ export function unify(
     );
 
     const term = parseTerm(facts["term"] ?? pick(row, /срок/i));
-    const value = parseMoney(facts["value"]);
-    const onetime = parseMoney(facts["onetime_payment"]);
-    const annual = parseMoney(facts["annual_payment"]);
+    const value = nkrMoney(facts["value"]);
+    const onetime = nkrMoney(facts["onetime_payment"]);
+    const annual = nkrMoney(facts["annual_payment"]);
     const grace = parseTerm(facts["grace_period"]);
     const indexationRaw = normText(facts["indexation"]) || null;
 
@@ -441,7 +455,11 @@ export function unify(
         } else if (
           current?.annual_payment_eur != null &&
           egovPayment.eur != null &&
-          Math.abs(current.annual_payment_eur - egovPayment.eur) > 0.01
+          Math.abs(current.annual_payment_eur - egovPayment.eur) > 0.01 &&
+          // общината често преписва числото от НКР формуляра (което е в
+          // евро въпреки „лв.", виж nkrMoney) — същото число не е конфликт
+          (egovPayment.value == null ||
+            Math.abs(current.annual_payment_eur - egovPayment.value) > 0.01)
         ) {
           db.prepare(
             "UPDATE concessions SET annual_payment_flag = 'contradictory' WHERE id = ?",

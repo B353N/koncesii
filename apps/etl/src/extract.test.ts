@@ -52,6 +52,9 @@ describe("разпознаване без инструменти", () => {
     expect(sniff(Buffer.from("\xef\xbb\xbf<?xml", "latin1"), ".xml")).toBe(
       "markup",
     );
+    // формулярите на НКР идват и в UTF-16, със и без BOM
+    expect(sniff(Buffer.from("<?xml", "utf16le"), ".xml")).toBe("markup");
+    expect(sniff(Buffer.from("\ufeff<?xml", "utf16le"), ".xml")).toBe("markup");
     expect(sniff(Buffer.from("просто текст"), ".bin")).toBe("unsupported");
   });
 
@@ -110,6 +113,11 @@ test("markupText: XML/HTML → текстът между таговете, съ�
     Buffer.from("</a>"),
   ]);
   expect(markupText(cp1251)).toBe("срок");
+  const utf16 = Buffer.from(
+    '<?xml version="1.0" encoding="utf-16"?><a>Срок: 10 години</a>',
+    "utf16le",
+  );
+  expect(markupText(utf16)).toBe("Срок: 10 години");
 });
 
 describe("броячите и повторните опити, без инструменти", () => {

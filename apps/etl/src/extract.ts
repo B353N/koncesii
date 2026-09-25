@@ -349,8 +349,10 @@ export function sniff(head: Buffer, ext: string): Sniffed {
     return "image";
   }
   // XML (напр. електронни формуляри, .onkr) и HTML — текстът е между таговете
-  const start = head
-    .toString("latin1")
+  const utf16 = utf16Order(head);
+  const start = (
+    utf16 ? new TextDecoder(utf16).decode(head) : head.toString("latin1")
+  )
     .replace(/^\xef\xbb\xbf/, "")
     .trimStart()
     .toLowerCase();
@@ -564,13 +566,29 @@ const ENTITIES: Record<string, string> = {
   nbsp: " ",
 };
 
+/**
+ * UTF-16 по BOM или, без BOM, по нулевите байтове около „<" в началото
+ * (електронните формуляри на НКР идват и така).
+ */
+function utf16Order(head: Buffer): "utf-16le" | "utf-16be" | null {
+  if (head[0] === 0xff && head[1] === 0xfe) return "utf-16le";
+  if (head[0] === 0xfe && head[1] === 0xff) return "utf-16be";
+  if (head[0] === 0x3c && head[1] === 0x00) return "utf-16le";
+  if (head[0] === 0x00 && head[1] === 0x3c) return "utf-16be";
+  return null;
+}
+
 /** XML/HTML → текст: таговете стават нови редове, същностите се декодират. */
 export function markupText(buf: Buffer): string {
+  const utf16 = utf16Order(buf);
   const head = buf.subarray(0, 200).toString("latin1");
   const enc = /encoding\s*=\s*["']([\w-]+)["']/i.exec(head)?.[1]?.toLowerCase();
   let text: string;
   try {
-    text = new TextDecoder(enc && enc !== "utf-8" ? enc : "utf-8").decode(buf);
+    // при UTF-16 декларацията не се чете от latin1 главата, а и не е нужна
+    text = new TextDecoder(
+      utf16 ?? (enc && enc !== "utf-8" ? enc : "utf-8"),
+    ).decode(buf);
   } catch {
     text = buf.toString("utf8");
   }

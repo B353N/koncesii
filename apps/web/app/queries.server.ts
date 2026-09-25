@@ -311,6 +311,23 @@ export interface PaymentRow {
   source_url: string;
 }
 
+/** Година от отчет за изпълнение на договора (т. 4.9 от формуляра на НКР). */
+export interface ReportedPaymentRow {
+  year: number | null;
+  due_raw: string | null;
+  due_eur: number | null;
+  fulfillment: "full" | "partial" | "none" | null;
+  paid_raw: string | null;
+  paid_eur: number | null;
+  on_time: 0 | 1 | null;
+  arrears_raw: string | null;
+  arrears_eur: number | null;
+  quote: string;
+  page: number;
+  document_url: string;
+  document_key: string;
+}
+
 export interface ConcessionDetail {
   concession: ConcessionFull;
   /** URL slug на партидата; адресът е /concessions/<slug>. */
@@ -322,6 +339,8 @@ export interface ConcessionDetail {
   /** Клаузите, извлечени от документите (избраните + разминаванията). */
   facts: FactRow[];
   payments: PaymentRow[];
+  /** Отчетите за изпълнение по години, най-новата първа. */
+  reportedPayments: ReportedPaymentRow[];
   flags: Array<{ code: string; severity: string; inputs: string }>;
 }
 
@@ -363,6 +382,7 @@ export function getConcession(regNum: string): ConcessionDetail | null {
       .all(id),
     documents: documentRows(db, id),
     facts: factRows(db, id),
+    reportedPayments: reportedPaymentRows(db, id),
     payments: db
       .prepare<[string], PaymentRow>(
         "SELECT contracted_raw, contracted_eur, source_url FROM payments WHERE concession_id = ? ORDER BY id",
@@ -798,6 +818,33 @@ export function hasDocumentText(db: Database.Database): boolean {
     documentTextSupport.set(db, ok);
   }
   return ok;
+}
+
+/** Стара база без таблицата не бива да чупи сайта — секцията просто липсва. */
+const reportedPaymentsSupport = new WeakMap<Database.Database, boolean>();
+function reportedPaymentRows(
+  db: Database.Database,
+  concessionId: string,
+): ReportedPaymentRow[] {
+  let ok = reportedPaymentsSupport.get(db);
+  if (ok === undefined) {
+    ok = !!db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'reported_payments'",
+      )
+      .get();
+    reportedPaymentsSupport.set(db, ok);
+  }
+  if (!ok) return [];
+  return db
+    .prepare<[string], Omit<ReportedPaymentRow, "document_key">>(
+      `SELECT year, due_raw, due_eur, fulfillment, paid_raw, paid_eur, on_time,
+              arrears_raw, arrears_eur, quote, page, document_url
+       FROM reported_payments WHERE concession_id = ?
+       ORDER BY year IS NULL, year DESC, id`,
+    )
+    .all(concessionId)
+    .map((r) => ({ ...r, document_key: documentKey(r.document_url) }));
 }
 
 function documentRows(

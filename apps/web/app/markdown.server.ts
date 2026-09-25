@@ -2,6 +2,7 @@ import {
   CONCESSION_KIND_LABELS,
   FLAG_DESCRIPTIONS,
   fmtEur,
+  FULFILLMENT_LABELS,
   fmtMonths,
   KIND_LABELS,
   KIND_PAGE_TITLES,
@@ -200,6 +201,27 @@ function mdConcessionDetail(param: string): string | null {
           `- **${f.code}** (тежест: ${SEVERITY_LABELS[f.severity] ?? f.severity}) — ${
             FLAG_DESCRIPTIONS[f.code] ?? ""
           }; входни данни: \`${f.inputs}\``,
+      ),
+    );
+  }
+  if (d.reportedPayments.length) {
+    lines.push(
+      ``,
+      `## Отчети за изпълнение (т. 4.9, дословно)`,
+      ``,
+      ...d.reportedPayments.map(
+        (r) =>
+          `- ${r.year ?? "година не е посочена"}: дължимо ${
+            r.due_eur != null
+              ? `${fmtEur(r.due_eur)} (${r.due_raw})`
+              : (r.due_raw ?? "—")
+          }; ${r.fulfillment ? FULFILLMENT_LABELS[r.fulfillment] : "отметката не е еднозначна"}${
+            r.paid_raw ? `, платени ${r.paid_raw}` : ""
+          }${r.on_time != null ? (r.on_time ? ", в срок" : ", не в срок") : ""}${
+            r.arrears_raw
+              ? `; дължими от предходни години ${r.arrears_raw}`
+              : ""
+          } ([отчет, стр. ${r.page}](${r.document_url}))`,
       ),
     );
   }

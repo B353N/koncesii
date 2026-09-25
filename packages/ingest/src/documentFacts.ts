@@ -146,7 +146,7 @@ function currencyOf(unit: string): "BGN" | "EUR" {
   return /^(евро|eur|€)$/iu.test(unit) ? "EUR" : "BGN";
 }
 
-interface MoneyMatch {
+export interface MoneyMatch {
   raw: string;
   amount: number;
   currency: "BGN" | "EUR";
@@ -157,7 +157,7 @@ interface MoneyMatch {
   vat: "with" | "without" | null;
 }
 
-function moneyMatches(text: string): MoneyMatch[] {
+export function moneyMatches(text: string): MoneyMatch[] {
   const out: MoneyMatch[] = [];
   MONEY_RE.lastIndex = 0;
   for (let m = MONEY_RE.exec(text); m; m = MONEY_RE.exec(text)) {
@@ -185,6 +185,12 @@ function moneyMatches(text: string): MoneyMatch[] {
 const TERM_RE = new RegExp(
   // „[360] месеца" — формулярите на НКР слагат числото в квадратни скоби
   String.raw`(?<![\d.,])\[?(\d{1,4})\]?\s*(?:${WORDS}\s*)?(години|година|год\.|г\.|месеца|месец|мес\.)(?![\p{L}])`,
+  "iu",
+);
+
+/** „… години и 6 (шест) месеца" — точно след годините. */
+const EXTRA_MONTHS_RE = new RegExp(
+  String.raw`^\s*и\s+(\d{1,2})\s*(?:${WORDS}\s*)?(?:месеца|месец|мес\.)(?![\p{L}])`,
   "iu",
 );
 
@@ -277,8 +283,23 @@ const WINDOW = 260;
 const SKIP_BEFORE_ANCHOR_RE =
   /(?:(?:минимал|максимал)\p{L}*|(?:удълж|продълж)\p{L}*(?:\s+\p{L}+){0,2})\s+$/iu;
 
+/**
+ * Изрази, които само споменават срока или плащането, без да ги определят:
+ * „преди изтичане срока на концесията", „през целия срок …", „10 години от
+ * срока …", „50 % от годишното възнаграждение". Не важи за гратисния
+ * период - „след изтичане на гратисния период от 3 години" го определя.
+ */
+const REFERENCE_BEFORE_ANCHOR_RE =
+  /(?<!\p{L})(?:изтич\p{L}*|края|целия|през|от)(?:\s+на)?\s+$/iu;
+
 const SKIP_PREFIX_RE =
-  /не\s+може|по-дълъг|по-кратък|максимал|минимал|не\s+по-малк|удълж|продълж|изтичане|гаранци|неустойк|депозит|лихв|санкци|обезпечени/iu;
+  /не\s+може|по-дълъг|по-кратък|максимал|минимал|минимум|не\s+по-малк|удълж|продълж|изтичане|гаранци|неустойк|депозит|лихв|санкци|обезпечени|досегаш|(?:увеличава|намалява)\p{L}*\s+с(?!\p{L})/iu;
+
+/**
+ * Обявлението за възложена концесия носи и „Първоначална прогнозна обща
+ * стойност", и „Обща стойност на концесията" - меродавна е втората.
+ */
+const INITIAL_ESTIMATE_RE = /първоначалн\p{L}*\s+прогнозн/iu;
 
 /** „Срок на концесията, без предвидените удължавания: [360] месеца" не е удължаване. */
 const NOT_AN_EXTENSION_RE = /без\s+(?:\p{L}+\s+)?удължавани\p{L}*/giu;
@@ -363,10 +384,11 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
           continue;
         }
 
+        const before = text.slice(Math.max(0, aStart - 40), aStart);
         if (
-          SKIP_BEFORE_ANCHOR_RE.test(
-            text.slice(Math.max(0, aStart - 40), aStart),
-          )
+          SKIP_BEFORE_ANCHOR_RE.test(before) ||
+          (anchor.field !== "grace_period" &&
+            REFERENCE_BEFORE_ANCHOR_RE.test(before))
         ) {
           continue;
         }
@@ -392,13 +414,24 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
             continue;
           }
           const n = Number(t[1]);
-          const months = /^мес/iu.test(t[2]!) ? n : n * 12;
+          let months = /^мес/iu.test(t[2]!) ? n : n * 12;
+          let raw = t[0];
+          // „26 години и 6 месеца" — месеците след годините се добавят
+          if (!/^мес/iu.test(t[2]!)) {
+            const extra = EXTRA_MONTHS_RE.exec(
+              win.slice(t.index + t[0].length),
+            );
+            if (extra) {
+              months += Number(extra[1]);
+              raw += extra[0];
+            }
+          }
           if (months < 1 || months > 1200) continue;
           const start = aEnd + t.index;
-          const end = start + t[0].length;
+          const end = start + raw.length;
           push({
             field: anchor.field,
-            valueRaw: t[0].trim(),
+            valueRaw: raw.trim(),
             amount: null,
             currency: null,
             eur: null,
@@ -444,6 +477,9 @@ export function extractDocFacts(pages: readonly string[]): DocFact[] {
         if (!money) continue;
         const prefix = win.slice(0, money.start);
         if (skipPrefix(prefix)) continue;
+        if (anchor.field === "value" && INITIAL_ESTIMATE_RE.test(prefix)) {
+          continue;
+        }
         if (
           anchor.field === "annual_payment" &&
           anchor.priority === 2 &&
@@ -497,15 +533,39 @@ export function extractDocAmounts(pages: readonly string[]): DocAmount[] {
   return out;
 }
 
+/** Текстът на линка в НКР - не казва нищо за документа. */
+const GENERIC_TITLE_RE = /^\s*(?:свали|изтегли|download|документ|файл)?\s*$/iu;
+
 /**
  * Приоритет на документа при избор между няколко: договорът е меродавен,
  * анексите/допълнителните споразумения променят първоначалните стойности,
- * решенията носят прогнозни/минимални стойности.
+ * решенията и документацията по процедурата носят прогнозни/минимални
+ * стойности, отчетите за изпълнение - платеното за година, не договореното.
+ * В НКР линкът на повечето документи е „Свали", затова тогава решава името
+ * на файла (често на латиница: dogovor, reshenie, aneks).
  */
-export function documentRank(title: string | null | undefined): number {
-  const t = (title ?? "").toLowerCase();
-  if (/анекс|допълнително\s+споразумение|изменени/iu.test(t)) return 3;
-  if (/договор/iu.test(t)) return 0;
-  if (/решени|заповед/iu.test(t)) return 2;
+export function documentRank(
+  title: string | null | undefined,
+  filename?: string | null,
+): number {
+  const t = (
+    title && !GENERIC_TITLE_RE.test(title) ? title : (filename ?? "")
+  ).toLowerCase();
+  if (
+    /анекс|aneks|anex|допълнително\s+споразумение|доп\.?\s*спор|dop\.?[\s_-]*spor|изменени|izmenenie/iu.test(
+      t,
+    )
+  ) {
+    return 3;
+  }
+  if (
+    /изпълн|izpal|izpuln|отчет|otchet|проект|proekt|документация|dokumentaci|образец|obrazec|обосновка/iu.test(
+      t,
+    )
+  ) {
+    return 2;
+  }
+  if (/договор|dogovor|agreement|contract/iu.test(t)) return 0;
+  if (/решени|reshenie|заповед|zapoved/iu.test(t)) return 2;
   return 1;
 }

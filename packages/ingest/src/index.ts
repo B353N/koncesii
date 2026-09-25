@@ -37,3 +37,8 @@ export {
   type DocFact,
   type DocFactField,
 } from "./documentFacts";
+export {
+  extractReportedPayments,
+  type Fulfillment,
+  type ReportedPayment,
+} from "./paymentReports";

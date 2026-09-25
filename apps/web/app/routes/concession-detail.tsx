@@ -13,6 +13,7 @@ import {
   fmtDocumentMeta,
   fmtEur,
   fmtFact,
+  FULFILLMENT_LABELS,
   fmtMonths,
   fmtPercent,
   KIND_LABELS,
@@ -1082,6 +1083,87 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                   ·{" "}
                   <a
                     href={f.document_url}
+                    rel="noopener"
+                    className="text-water underline underline-offset-2"
+                  >
+                    оригинал
+                  </a>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {detail.reportedPayments.length > 0 && (
+        <Card title="Отчети за изпълнение" section="IX" className="mt-3">
+          <p className="mb-3 max-w-[76ch] text-[13.5px] text-stone">
+            Всяка година концедентът подава в НКР информация за изпълнението на
+            договора. Тук е т. 4.9 от тези отчети: дължимото концесионно
+            възнаграждение за годината и какво е отметнато за плащането му,
+            дословно. Когато отметката не се чете еднозначно (например при
+            сканиран отчет), тя не се тълкува.{" "}
+            <Link
+              to={`${PATHS.methodology}#izvlichane-ot-dokumentite`}
+              className="text-water underline underline-offset-2"
+            >
+              Как се извлича
+            </Link>
+          </p>
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {detail.reportedPayments.map((r, i) => (
+              <li key={i} className="rounded-xl bg-paper p-3 text-[13.5px]">
+                <span className="block text-[12px] text-stone">
+                  {r.year != null
+                    ? `${r.year} г.`
+                    : "годината не е посочена в отчета"}
+                </span>
+                <b className="block font-display text-[16px] font-bold">
+                  {r.due_eur != null
+                    ? fmtEur(r.due_eur)
+                    : (r.due_raw ?? "няма данни")}
+                </b>
+                <span className="block text-[12px] text-stone">
+                  дължимо
+                  {r.due_eur != null && r.due_raw ? ` (${r.due_raw})` : ""}
+                </span>
+                <span className="mt-1 block">
+                  {r.fulfillment
+                    ? FULFILLMENT_LABELS[r.fulfillment]
+                    : "плащането не е отметнато еднозначно"}
+                  {r.paid_raw && (
+                    <>
+                      , платени <span className="font-mono">{r.paid_raw}</span>
+                    </>
+                  )}
+                  {r.on_time != null && (
+                    <>, {r.on_time ? "в срок" : "не в срок"}</>
+                  )}
+                </span>
+                {r.arrears_raw && (
+                  <span className="block text-[12.5px]">
+                    От предходни години:{" "}
+                    <span className="font-mono">{r.arrears_raw}</span>
+                  </span>
+                )}
+                <details className="mt-1 text-[12px] text-stone">
+                  <summary className="cursor-pointer select-none marker:text-limestone">
+                    цитат от отчета, стр. {r.page}
+                  </summary>
+                  <span className="mt-0.5 block italic break-words text-ink/80">
+                    „{r.quote}“
+                  </span>
+                </details>
+                <span className="mt-1 block text-[12px] text-stone">
+                  <Link
+                    to={`${documentHref(detail.slug, r.document_key)}#str-${r.page}`}
+                    className="text-water underline underline-offset-2"
+                  >
+                    текст
+                  </Link>{" "}
+                  ·{" "}
+                  <a
+                    href={r.document_url}
                     rel="noopener"
                     className="text-water underline underline-offset-2"
                   >

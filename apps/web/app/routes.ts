@@ -21,6 +21,7 @@ export default [
   route("changes", "routes/changes.tsx"),
   route("map", "routes/map.tsx"),
   route("map.geojson", "routes/map-geojson.ts"),
+  route("map-points.json", "routes/map-points.ts"),
   route("flags", "routes/flags.tsx"),
   route("flags.csv", "routes/flags-csv.ts"),
   route("search", "routes/search.tsx"),

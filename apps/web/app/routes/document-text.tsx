@@ -89,7 +89,7 @@ export default function DocumentText({ loaderData }: Route.ComponentProps) {
         <div className="mb-1 font-mono text-xs uppercase tracking-wider text-stone">
           Документ по партида {doc.concession.reg_num}
         </div>
-        <h1 className="font-display text-2xl leading-tight font-bold text-balance">
+        <h1 className="font-sans text-2xl leading-tight font-bold text-balance">
           {docTitle(doc.document.title)}
         </h1>
         <p className="mt-1.5 text-sm text-ink/85">

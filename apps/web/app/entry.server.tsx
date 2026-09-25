@@ -25,10 +25,10 @@ function csp(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' https://*.googletagmanager.com`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.google-analytics.com https://*.googletagmanager.com",
+    "img-src 'self' data: blob: https://tiles.openfreemap.org https://*.google-analytics.com https://*.googletagmanager.com",
     "font-src 'self' data:",
-    // MapLibre тегли тайловете през fetch → connect-src, не img-src
-    "connect-src 'self' https://tile.openstreetmap.org https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com",
+    // MapLibre тегли стила, тайловете, шрифтовете и спрайтовете през fetch → connect-src
+    "connect-src 'self' https://tiles.openfreemap.org https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

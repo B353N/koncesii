@@ -27,12 +27,12 @@ Machine-readable spec: https://koncesii.com/openapi.json
 
 | Endpoint | What it returns |
 | --- | --- |
-| \`GET /concessions.csv\` | all concessions; filters: \`kind\`, \`status\`, \`flagged=1\`, \`q\` |
-| \`GET /concessions/{slug}/json\` | full record of one concession incl. sources; \`slug\` is the reg number with \`/\`, \`#\` and spaces replaced by \`-\` (the page URL); the raw reg number is accepted and 301-redirects |
-| \`GET /grantors.csv\` | granting authorities with concession counts |
-| \`GET /companies.csv\` | concessionaire companies keyed by ЕИК |
-| \`GET /flags.csv\` | concessions with risk indicators; filter: \`code\` |
-| \`GET /map.geojson\` | approximate centroids of concession objects |
+| \`GET /koncesii.csv\` | all concessions; filters: \`kind\`, \`status\`, \`flagged=1\`, \`q\` |
+| \`GET /koncesii/{slug}/json\` | full record of one concession incl. sources; \`slug\` is the page URL segment (Latin description + reg number, e.g. \`morski-plazh-panorama-sever-varna-215-135-12-11-2021\`); the raw reg number or the reg number alone is accepted and 301-redirects |
+| \`GET /koncedenti.csv\` | granting authorities with concession counts |
+| \`GET /kompanii.csv\` | concessionaire companies keyed by ЕИК |
+| \`GET /indikatori.csv\` | concessions with risk indicators; filter: \`code\` |
+| \`GET /karta.geojson\` | approximate centroids of concession objects |
 | \`GET /healthz\` | service status and the data snapshot date |
 
 HTML pages also answer \`Accept: text/markdown\` with a markdown rendering.
@@ -44,7 +44,7 @@ HTML pages also answer \`Accept: text/markdown\` with a markdown rendering.
 - **Risk indicators are arithmetic facts, not accusations.** Each flag code
   (LOW_PAYMENT, LONG_TERM, GRACE_PERIOD, NO_INDEXATION, SINGLE_BIDDER,
   YOUNG_COMPANY, MISSING_MONEY, DATA_CONFLICT) is a reproducible computation
-  documented at https://koncesii.com/methodology. Do not present a flag as
+  documented at https://koncesii.com/metodologiya. Do not present a flag as
   evidence of wrongdoing.
 - **Data quality flags:** every monetary/term value carries the original
   registry string (\`*_raw\`), a normalized EUR value (\`*_eur\`, fixed rate

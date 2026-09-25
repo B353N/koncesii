@@ -1,4 +1,6 @@
+import { redirect } from "react-router";
 import type { Route } from "./+types/concessions-kind";
+import { kindOfSlug } from "../slug";
 import { Breadcrumbs, DataPending, type Crumb } from "../components";
 import {
   ConcessionsListView,
@@ -17,9 +19,10 @@ import { getSummary, kindStats, listConcessions } from "../queries.server";
 import { absUrl, pagedLinkDescriptors, pagedMeta, pageTitle } from "../seo";
 import { breadcrumbJsonLd, itemListJsonLd, jsonLdScript } from "../jsonLd";
 import { concessionHref } from "../slug";
+import { PATHS } from "../paths";
 
 /**
- * /concessions/vid/:kind - страница по вид обект (язовири, плажове, добив…).
+ * /koncesii/vid/:kind - страница по вид обект (язовири, плажове, добив…).
  * Същият списък като /concessions, но със свой адрес, заглавие и уводен
  * абзац с числата от базата, за да е самостоятелна страница за търсачките,
  * а не "дубликат на /concessions с филтър".
@@ -47,9 +50,13 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export function loader({ params, request }: Route.LoaderArgs) {
-  const kind = params.kind;
-  if (!(kind in KIND_LABELS)) throw new Response("Not Found", { status: 404 });
+  const hit = kindOfSlug(params.kind);
+  if (!hit || !(hit.kind in KIND_LABELS))
+    throw new Response("Not Found", { status: 404 });
   const url = new URL(request.url);
+  // /koncesii/vid/beach → /koncesii/vid/morski-plazhove
+  if (!hit.canonical) throw redirect(`${kindHref(hit.kind)}${url.search}`, 301);
+  const kind = hit.kind;
   const filters = { ...readListFilters(url), kind };
   const page = readPage(url);
   const { rows, total } = listConcessions({
@@ -81,7 +88,7 @@ export default function ConcessionsByKind({
   const heading = KIND_PAGE_TITLES[kind] ?? `Концесии: ${kind}`;
   const crumbs: Crumb[] = [
     { label: "Начало", to: "/" },
-    { label: "Концесии", to: "/concessions" },
+    { label: "Концесии", to: PATHS.concessions },
     { label: KIND_LABELS[kind] ?? kind },
   ];
 

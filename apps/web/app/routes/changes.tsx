@@ -10,6 +10,7 @@ import {
 import { breadcrumbJsonLd, jsonLdScript } from "../jsonLd";
 import { changeDates, getSummary, recentlyChanged } from "../queries.server";
 import { absUrl, ogDescriptors, pageTitle } from "../seo";
+import { PATHS } from "../paths";
 
 /**
  * /changes - какво се е променило в регистрите при последните снемания.
@@ -34,9 +35,9 @@ export function meta({ loaderData }: Route.MetaArgs) {
     ...ogDescriptors({
       title: "Промени в регистрите на концесиите",
       description,
-      url: absUrl("/changes"),
+      url: absUrl(PATHS.changes),
     }),
-    { tagName: "link" as const, rel: "canonical", href: absUrl("/changes") },
+    { tagName: "link" as const, rel: "canonical", href: absUrl(PATHS.changes) },
   ];
 }
 
@@ -83,7 +84,7 @@ export default function Changes({ loaderData }: Route.ComponentProps) {
         документи и индикатори. Датата тук е на реалната промяна, не на
         снемането.{" "}
         <Link
-          to="/methodology"
+          to={PATHS.methodology}
           className="text-water underline underline-offset-2"
         >
           Методология

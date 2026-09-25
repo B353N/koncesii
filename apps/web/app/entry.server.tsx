@@ -92,7 +92,7 @@ export default function handleRequest(
     "Link",
     '</.well-known/api-catalog>; rel="api-catalog", ' +
       '</openapi.json>; rel="service-desc", ' +
-      '</methodology>; rel="service-doc"',
+      '</metodologiya>; rel="service-doc"',
   );
 
   logIfError(request, responseStatusCode);

@@ -8,6 +8,7 @@ import {
 } from "./format";
 import type { ConcessionRow } from "./queries.server";
 import { concessionHref } from "./slug";
+import { companyHref, grantorHref } from "./paths";
 
 /** Речникът на интерфейса — docs/design.md. */
 
@@ -297,7 +298,7 @@ export function ConcessionsTable({
                 <td className="py-2 pr-2">
                   {r.grantor_slug ? (
                     <Link
-                      to={`/grantors/${encodeURIComponent(r.grantor_slug)}`}
+                      to={grantorHref(r.grantor_slug)}
                       className="text-ink hover:text-water"
                     >
                       {r.grantor_name}
@@ -310,7 +311,7 @@ export function ConcessionsTable({
               <td className="py-2 pr-2">
                 {r.eik ? (
                   <Link
-                    to={`/companies/${r.eik}`}
+                    to={companyHref(r.concessionaire_name ?? "", r.eik)}
                     className="line-clamp-2 text-ink hover:text-water"
                     title={r.concessionaire_name ?? undefined}
                   >

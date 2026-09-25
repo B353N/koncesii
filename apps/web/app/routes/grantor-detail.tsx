@@ -1,3 +1,4 @@
+import { redirect } from "react-router";
 import type { Route } from "./+types/grantor-detail";
 import {
   Breadcrumbs,
@@ -16,6 +17,7 @@ import {
   sentence,
 } from "../seo";
 import { concessionHref } from "../slug";
+import { grantorHref, PATHS } from "../paths";
 
 const GRANTOR_KIND: Record<string, string> = {
   municipality: "община",
@@ -56,7 +58,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
     `— срокове и възнаграждения`,
     90,
   );
-  const url = absUrl(`/grantors/${encodeURIComponent(grantor.id.slice(3))}`);
+  const url = absUrl(grantorHref(grantor.id.slice(3)));
   return [
     { title: pageTitle(title) },
     { name: "description", content: description },
@@ -70,6 +72,9 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export function loader({ params }: Route.LoaderArgs) {
   const result = getGrantor(params.slug);
   if (!result) throw new Response("Not Found", { status: 404 });
+  // старият адрес на кирилица → латинският
+  if (result.slug !== params.slug)
+    throw redirect(grantorHref(result.grantor.id.slice(3)), 301);
   return result;
 }
 
@@ -77,7 +82,7 @@ export default function GrantorDetail({ loaderData }: Route.ComponentProps) {
   const { grantor, concessions } = loaderData;
   const crumbs: Crumb[] = [
     { label: "Начало", to: "/" },
-    { label: "Концеденти", to: "/grantors" },
+    { label: "Концеденти", to: PATHS.grantors },
     { label: grantor.name },
   ];
   return (
@@ -91,7 +96,7 @@ export default function GrantorDetail({ loaderData }: Route.ComponentProps) {
             "@context": "https://schema.org",
             "@type": "GovernmentOrganization",
             name: grantor.name,
-            url: absUrl(`/grantors/${encodeURIComponent(grantor.id.slice(3))}`),
+            url: absUrl(grantorHref(grantor.id.slice(3))),
           },
           itemListJsonLd(
             concessions.slice(0, 50).map((c) => absUrl(concessionHref(c.slug))),

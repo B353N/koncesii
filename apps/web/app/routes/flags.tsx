@@ -11,6 +11,7 @@ import {
 import { fmtMonths } from "../format";
 import { getSummary, listFlagCodes, listFlagged } from "../queries.server";
 import { absUrl, ogDescriptors, pageTitle } from "../seo";
+import { flagHref, PATHS } from "../paths";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -24,9 +25,9 @@ export function meta({}: Route.MetaArgs) {
       title: "Индикатори за риск по концесиите",
       description:
         "Концесиите с индикатори за риск по публична, детерминистична методология. Всеки индикатор е възпроизводим аритметичен факт.",
-      url: absUrl("/flags"),
+      url: absUrl(PATHS.flags),
     }),
-    { tagName: "link", rel: "canonical", href: "https://koncesii.com/flags" },
+    { tagName: "link", rel: "canonical", href: absUrl(PATHS.flags) },
   ];
 }
 
@@ -62,7 +63,7 @@ export default function Flags({ loaderData }: Route.ComponentProps) {
             {rows.length} {rows.length === 1 ? "концесия" : "концесии"} с поне
             един индикатор · всеки е възпроизводим аритметичен факт по{" "}
             <Link
-              to="/methodology"
+              to={PATHS.methodology}
               className="text-water underline underline-offset-2"
             >
               публичната методология
@@ -72,7 +73,7 @@ export default function Flags({ loaderData }: Route.ComponentProps) {
       />
       <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
         <Link
-          to="/flags"
+          to={PATHS.flags}
           className={
             !code
               ? "rounded-[2px] border border-water bg-[#eef3f0] px-2.5 py-1 text-water no-underline"
@@ -84,7 +85,7 @@ export default function Flags({ loaderData }: Route.ComponentProps) {
         {codes.map((c) => (
           <Link
             key={c.code}
-            to={`/flags?code=${c.code}`}
+            to={flagHref(c.code)}
             className={
               code === c.code
                 ? "rounded-[2px] border border-water bg-[#eef3f0] px-2.5 py-1 font-mono text-water no-underline"
@@ -95,7 +96,9 @@ export default function Flags({ loaderData }: Route.ComponentProps) {
           </Link>
         ))}
       </div>
-      <ExportLinks csvHref={`/flags.csv${code ? `?code=${code}` : ""}`} />
+      <ExportLinks
+        csvHref={`${PATHS.flagsCsv}${code ? `?code=${code}` : ""}`}
+      />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[700px] border-collapse text-[13.5px]">
           <thead>

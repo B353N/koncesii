@@ -14,6 +14,7 @@ import type { Route } from "./+types/root";
 import { jsonLdScript, websiteJsonLd } from "./jsonLd";
 import { useNonce } from "./nonce";
 import "./app.css";
+import { PATHS } from "./paths";
 
 /** Google Analytics 4 — само в production, за да не шуми dev трафикът. */
 const GA_ID = "G-GT7K4WV5PM";
@@ -24,17 +25,17 @@ gtag('config', '${GA_ID}');`;
 
 /** Основната навигация: един ред. Останалото е в менюто „Още" и във футъра. */
 const NAV = [
-  ["/map", "Карта"],
-  ["/concessions", "Концесии"],
-  ["/companies", "Компании"],
-  ["/grantors", "Концеденти"],
-  ["/flags", "Индикатори"],
-  ["/blog", "Анализи"],
+  [PATHS.map, "Карта"],
+  [PATHS.concessions, "Концесии"],
+  [PATHS.companies, "Компании"],
+  [PATHS.grantors, "Концеденти"],
+  [PATHS.flags, "Индикатори"],
+  [PATHS.blog, "Анализи"],
 ] as const;
 const NAV_MORE = [
-  ["/changes", "Промени"],
-  ["/methodology", "Методология"],
-  ["/search", "Търсене"],
+  [PATHS.changes, "Промени"],
+  [PATHS.methodology, "Методология"],
+  [PATHS.search, "Търсене"],
 ] as const;
 
 /** Страници на цяла ширина (картата) слагат `handle = { fullBleed: true }`. */
@@ -140,7 +141,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </nav>
             <div className="ml-auto flex items-center gap-1">
               <Link
-                to="/search"
+                to={PATHS.search}
                 className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[14px] font-semibold text-stone no-underline hover:bg-paper hover:text-ink"
               >
                 <SearchIcon />
@@ -204,10 +205,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               ))}
             </nav>
             <nav aria-label="За проекта" className="grid content-start gap-1.5">
-              <Link to="/methodology" className="text-ink hover:text-water">
+              <Link
+                to={PATHS.methodology}
+                className="text-ink hover:text-water"
+              >
                 Методология на индикаторите
               </Link>
-              <Link to="/changes" className="text-ink hover:text-water">
+              <Link to={PATHS.changes} className="text-ink hover:text-water">
                 Промени в регистъра
               </Link>
               <a href="/openapi.json" className="text-ink hover:text-water">

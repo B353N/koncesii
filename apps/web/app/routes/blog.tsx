@@ -4,6 +4,7 @@ import { Breadcrumbs, PageTitle, type Crumb } from "../components";
 import { POSTS, postMeta } from "../blog/posts";
 import { breadcrumbJsonLd, jsonLdScript } from "../jsonLd";
 import { absUrl, ogDescriptors, pageTitle } from "../seo";
+import { blogHref, PATHS } from "../paths";
 
 /** /blog - индекс на анализите върху данните. */
 
@@ -17,9 +18,9 @@ export function meta({}: Route.MetaArgs) {
     ...ogDescriptors({
       title: "Анализи върху данните за концесиите",
       description: DESCRIPTION,
-      url: absUrl("/blog"),
+      url: absUrl(PATHS.blog),
     }),
-    { tagName: "link" as const, rel: "canonical", href: absUrl("/blog") },
+    { tagName: "link" as const, rel: "canonical", href: absUrl(PATHS.blog) },
   ];
 }
 
@@ -41,14 +42,14 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
             "@context": "https://schema.org",
             "@type": "Blog",
             name: "Анализи върху данните за концесиите",
-            url: absUrl("/blog"),
+            url: absUrl(PATHS.blog),
             inLanguage: "bg",
             blogPost: posts.map((p) => ({
               "@type": "BlogPosting",
               headline: p.title,
               description: p.lead,
               datePublished: p.published,
-              url: absUrl(`/blog/${p.slug}`),
+              url: absUrl(blogHref(p.slug)),
             })),
           },
         ])}
@@ -66,7 +67,7 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
         {posts.map((p) => (
           <li key={p.slug} className="border-t border-limestone py-4">
             <Link
-              to={`/blog/${p.slug}`}
+              to={blogHref(p.slug)}
               className="font-display text-lg font-bold text-water no-underline hover:underline"
             >
               {p.title}

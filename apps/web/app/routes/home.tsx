@@ -23,6 +23,7 @@ import {
   topByTerm,
   topGrantors,
 } from "../queries.server";
+import { blogHref, flagHref, grantorHref, PATHS } from "../paths";
 
 export const handle: RouteHandle = { fullBleed: true };
 
@@ -113,10 +114,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-12 sm:px-6 md:grid-cols-4">
           {(
             [
-              [summary.concessions, "концесии в регистъра", "/concessions"],
-              [summary.concessionaires, "концесионери", "/companies"],
-              [summary.grantors, "концеденти", "/grantors"],
-              [summary.flagged, "партиди с поне един индикатор", "/flags"],
+              [summary.concessions, "концесии в регистъра", PATHS.concessions],
+              [summary.concessionaires, "концесионери", PATHS.companies],
+              [summary.grantors, "концеденти", PATHS.grantors],
+              [summary.flagged, "партиди с поне един индикатор", PATHS.flags],
             ] as const
           ).map(([n, label, to]) => (
             <Link key={to} to={to} className="group text-white no-underline">
@@ -141,7 +142,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </h2>
           <p className="mt-1.5 mb-7 text-stone">
             Всеки индикатор е аритметичен факт, изчислен по{" "}
-            <Link to="/methodology" className="text-water underline">
+            <Link to={PATHS.methodology} className="text-water underline">
               публична методология
             </Link>
             . Не е обвинение.
@@ -150,7 +151,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             {flagCounts.map((f) => (
               <li key={f.code}>
                 <Link
-                  to={`/flags?code=${f.code}`}
+                  to={flagHref(f.code)}
                   className="block h-full rounded-2xl border-[1.5px] border-transparent bg-raised p-5 text-ink no-underline hover:border-ink"
                 >
                   <FlagPin sev={SEVERITY_RANK[f.severity] ?? 1} />
@@ -194,10 +195,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             <ul>
               {grantors.map((g) => (
                 <li key={g.slug}>
-                  <Link
-                    to={`/grantors/${encodeURIComponent(g.slug)}`}
-                    className={ROW}
-                  >
+                  <Link to={grantorHref(g.slug)} className={ROW}>
                     <span className="truncate">{g.name}</span>
                     <span className="text-stone tabular-nums">
                       {g.concessions}
@@ -207,7 +205,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
               ))}
             </ul>
             <Link
-              to="/grantors"
+              to={PATHS.grantors}
               className="mt-3 inline-block font-semibold text-water"
             >
               Всички концеденти
@@ -226,7 +224,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             {posts.map((p) => (
               <li key={p.slug}>
                 <Link
-                  to={`/blog/${p.slug}`}
+                  to={blogHref(p.slug)}
                   className="block h-full rounded-2xl bg-raised p-5 text-ink no-underline hover:shadow-[inset_0_0_0_1.5px_var(--color-ink)]"
                 >
                   <b className="block text-[17px] leading-snug">{p.title}</b>
@@ -238,7 +236,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             ))}
           </ul>
           <Link
-            to="/blog"
+            to={PATHS.blog}
             className="mt-4 inline-block font-semibold text-water"
           >
             Всички анализи

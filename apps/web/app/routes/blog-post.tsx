@@ -6,6 +6,7 @@ import { loadPostData } from "../blog/posts.server";
 import { breadcrumbJsonLd, jsonLdScript } from "../jsonLd";
 import { getSummary } from "../queries.server";
 import { absUrl, clampDescription, ogDescriptors, pageTitle } from "../seo";
+import { blogHref, PATHS } from "../paths";
 
 /** /blog/:slug - един анализ. Числата се четат от базата при рендиране. */
 
@@ -13,7 +14,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
   if (!loaderData) return [{ title: pageTitle("Анализ") }];
   const { post } = loaderData;
   const description = clampDescription(post.lead);
-  const url = absUrl(`/blog/${post.slug}`);
+  const url = absUrl(blogHref(post.slug));
   return [
     { title: pageTitle(post.title) },
     { name: "description", content: description },
@@ -49,7 +50,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
   const renderBody = entry.Body as (d: unknown) => React.ReactElement;
   const crumbs: Crumb[] = [
     { label: "Начало", to: "/" },
-    { label: "Анализи", to: "/blog" },
+    { label: "Анализи", to: PATHS.blog },
     { label: post.title },
   ];
 
@@ -67,9 +68,9 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
             description: post.lead,
             datePublished: post.published,
             ...(dataDate ? { dateModified: dataDate } : {}),
-            url: absUrl(`/blog/${post.slug}`),
+            url: absUrl(blogHref(post.slug)),
             inLanguage: "bg",
-            isPartOf: { "@type": "Blog", url: absUrl("/blog") },
+            isPartOf: { "@type": "Blog", url: absUrl(PATHS.blog) },
             publisher: { "@id": "https://koncesii.com/#organization" },
           },
         ])}
@@ -93,7 +94,7 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
           {others.map((p) => (
             <li key={p.slug} className="border-t border-limestone py-2">
               <Link
-                to={`/blog/${p.slug}`}
+                to={blogHref(p.slug)}
                 className="text-water underline decoration-1 underline-offset-2"
               >
                 {p.title}

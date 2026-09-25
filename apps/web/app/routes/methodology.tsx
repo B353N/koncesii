@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { marked } from "marked";
 import type { Route } from "./+types/methodology";
 import { absUrl, ogDescriptors, pageTitle } from "../seo";
+import { PATHS } from "../paths";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -17,12 +18,12 @@ export function meta({}: Route.MetaArgs) {
       title: "Методология на индикаторите за риск",
       description:
         "Публичната методология на индикаторите за риск: всеки флаг е възпроизводим аритметичен факт с явни прагове.",
-      url: absUrl("/methodology"),
+      url: absUrl(PATHS.methodology),
     }),
     {
       tagName: "link",
       rel: "canonical",
-      href: "https://koncesii.com/methodology",
+      href: absUrl(PATHS.methodology),
     },
   ];
 }

@@ -2,6 +2,8 @@
  * SEO помощници: заглавие на страница, canonical адреси и пагинация.
  * Чисти функции без достъп до базата - тестват се в seo.test.ts.
  */
+import { shortObjectTitle } from "./format";
+import { translit } from "./slug";
 
 export const SITE = "https://koncesii.com";
 export const SITE_NAME = "КОНЦЕСИИ";
@@ -221,4 +223,28 @@ export function ogDescriptors(o: {
     { property: "og:url", content: o.url },
     ...(o.type ? [{ property: "og:type", content: o.type }] : []),
   ];
+}
+
+/**
+ * Описателната част на адреса на партида: краткият етикет на обекта и
+ * общината („Морски плаж „Панорама - север" Варна"). Родовите заглавия
+ * („услуга") се заменят с вида и концедента. Само подрежда данни от
+ * базата; slugify го прави на латиница.
+ */
+export function concessionUrlText(p: {
+  title: string | null;
+  kindLabel?: string | null;
+  grantorName?: string | null;
+  municipality?: string | null;
+}): string {
+  const raw = (p.title ?? "").trim();
+  const grantor = usableName(p.grantorName)?.replace(/^кмет на\s+/iu, "");
+  const head =
+    !raw || isGenericTitle(raw)
+      ? [p.kindLabel ?? "Концесия", grantor].filter(Boolean).join(" ")
+      : shortObjectTitle(raw);
+  const place = p.municipality?.trim();
+  if (place && !translit(head).includes(translit(place)))
+    return `${head} ${place}`;
+  return head;
 }

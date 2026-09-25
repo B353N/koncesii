@@ -38,6 +38,7 @@ import {
   sentence,
 } from "../seo";
 import { breadcrumbJsonLd, concessionJsonLd, jsonLdScript } from "../jsonLd";
+import { companyHref, documentHref, grantorHref, PATHS } from "../paths";
 
 /** Заглавието на страницата: регистровото, допълнено с вид и концедент. */
 function titleOf(detail: ConcessionDetail): string {
@@ -250,7 +251,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
   const objectKind = detail.objects[0]?.kind ?? null;
   const crumbs: Crumb[] = [
     { label: "Начало", to: "/" },
-    { label: "Концесии", to: "/concessions" },
+    { label: "Концесии", to: PATHS.concessions },
     ...(objectKind
       ? [
           {
@@ -287,14 +288,17 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             fetchedAt: c.fetched_at,
             grantorName: detail.grantor?.name ?? null,
             grantorUrl: detail.grantor
-              ? absUrl(
-                  `/grantors/${encodeURIComponent(detail.grantor.id.slice(3))}`,
-                )
+              ? absUrl(grantorHref(detail.grantor.id.slice(3)))
               : null,
             concessionaireName: detail.concessionaire?.name ?? null,
             concessionaireEik: detail.concessionaire?.eik ?? null,
             concessionaireUrl: detail.concessionaire?.eik
-              ? absUrl(`/companies/${detail.concessionaire.eik}`)
+              ? absUrl(
+                  companyHref(
+                    detail.concessionaire.name,
+                    detail.concessionaire.eik,
+                  ),
+                )
               : null,
           }),
         ])}
@@ -323,7 +327,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             Концедент:{" "}
             {detail.grantor ? (
               <Link
-                to={`/grantors/${encodeURIComponent(detail.grantor.id.slice(3))}`}
+                to={grantorHref(detail.grantor.id.slice(3))}
                 className="font-semibold text-water underline decoration-1 underline-offset-2"
               >
                 {detail.grantor.name}
@@ -336,7 +340,10 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
               <>
                 {detail.concessionaire.eik ? (
                   <Link
-                    to={`/companies/${detail.concessionaire.eik}`}
+                    to={companyHref(
+                      detail.concessionaire.name,
+                      detail.concessionaire.eik,
+                    )}
                     className="font-semibold text-water underline decoration-1 underline-offset-2"
                   >
                     {detail.concessionaire.name}
@@ -428,7 +435,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                       {FLAG_CONDITIONS[f.code] ?? "виж методологията"}.
                       Индикаторът е аритметичен факт, не твърдение за нарушение.{" "}
                       <Link
-                        to="/methodology"
+                        to={PATHS.methodology}
                         className="text-water underline underline-offset-2"
                       >
                         Методология →
@@ -545,7 +552,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
             оригинала. Документът само попълва липсващо поле; при разминаване
             стойността от регистъра остава и полето се отбелязва.{" "}
             <Link
-              to="/methodology#izvlichane-ot-dokumentite"
+              to={`${PATHS.methodology}#izvlichane-ot-dokumentite`}
               className="text-water underline underline-offset-2"
             >
               Как се извлича →
@@ -570,7 +577,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                 <span className="mt-0.5 block text-xs text-stone">
                   {f.document_title ?? "документ"}, стр. {f.page} ·{" "}
                   <Link
-                    to={`${concessionHref(detail.slug)}/documents/${f.document_key}#str-${f.page}`}
+                    to={`${documentHref(detail.slug, f.document_key)}#str-${f.page}`}
                     className="text-water underline underline-offset-2"
                   >
                     текст
@@ -618,7 +625,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
                         <>
                           {meta ? " · " : ""}
                           <Link
-                            to={`${concessionHref(detail.slug)}/documents/${d.key}`}
+                            to={documentHref(detail.slug, d.key)}
                             className="text-water underline underline-offset-2"
                           >
                             Текстът на документа →
@@ -644,7 +651,7 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
               rows={related.byGrantor}
               more={{
                 label: "Всички партиди на този концедент →",
-                to: `/grantors/${encodeURIComponent(detail.grantor.id.slice(3))}`,
+                to: grantorHref(detail.grantor.id.slice(3)),
               }}
             />
           )}

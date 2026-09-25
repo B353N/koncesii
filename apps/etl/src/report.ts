@@ -29,6 +29,7 @@ const TABLES = [
   "document_pages",
   "extracted_facts",
   "document_amounts",
+  "reported_payments",
   "flags",
   "rollups",
   "review_queue",

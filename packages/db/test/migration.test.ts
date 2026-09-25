@@ -48,6 +48,7 @@ test("creates the staging, domain and derived tables from docs/core-scope.md", (
     "raw_nkr_announcements",
     "raw_nkr_export",
     "raw_old_concessions",
+    "reported_payments",
     "review_queue",
     "rollups",
   ]);

@@ -216,7 +216,7 @@ export function RelatedList({
               className="line-clamp-2 text-water underline decoration-1 underline-offset-2"
               title={r.title}
             >
-              {r.title}
+              {r.headline}
             </Link>
             <span className="block font-mono text-xs text-stone">
               {regNumLabel(r.reg_num)}
@@ -288,7 +288,7 @@ export function ConcessionsTable({
                   className="line-clamp-3 text-water underline decoration-1 underline-offset-2"
                   title={r.title}
                 >
-                  {r.title}
+                  {r.headline}
                 </Link>
                 <span className="block truncate font-mono text-xs text-stone">
                   {regNumLabel(r.reg_num)}

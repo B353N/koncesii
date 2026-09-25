@@ -250,7 +250,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             sub="Концесии, подредени по договорен срок"
             rows={longest.map((c) => ({
               slug: c.slug,
-              title: c.title,
+              title: c.headline,
+              raw: c.title,
               grantor: c.grantor_name,
               value: fmtMonths(c.term_months),
             }))}
@@ -260,7 +261,8 @@ export default function Home({ loaderData }: Route.ComponentProps) {
             sub="Годишното възнаграждение като % от стойността"
             rows={lowest.map((c) => ({
               slug: c.slug,
-              title: c.title,
+              title: c.headline,
+              raw: c.title,
               grantor: c.grantor_name,
               value: fmtPercent(c.ratio),
             }))}
@@ -284,6 +286,7 @@ function RankTable({
   rows: Array<{
     slug: string;
     title: string;
+    raw: string;
     grantor: string | null;
     value: string;
   }>;
@@ -304,7 +307,7 @@ function RankTable({
               <Link
                 to={concessionHref(r.slug)}
                 className="line-clamp-2 font-semibold text-ink no-underline hover:text-water hover:underline"
-                title={r.title}
+                title={r.raw}
               >
                 {r.title}
               </Link>

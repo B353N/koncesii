@@ -33,6 +33,8 @@ export interface ConcessionRow {
   reg_num: string;
   /** URL slug на партидата (виж slug.ts); адресът е /koncesii/<slug>. */
   slug: string;
+  /** Краткото заглавие (h1 на партидата) - текстът на връзките. */
+  headline: string;
   title: string;
   status: string | null;
   grantor_name: string | null;
@@ -157,12 +159,23 @@ export function concessionTitles(
   };
 }
 
+/**
+ * Адресът и краткото заглавие на всеки ред: връзките в списъците носят
+ * същия текст като h1 на партидата (сигнал за търсачките и четим за
+ * хората); регистровото заглавие остава в `title`.
+ */
 function withSlugs<T extends { reg_num: string }>(
   db: Database.Database,
   rows: T[],
-): Array<T & { slug: string }> {
-  const idx = slugIndex(db);
-  return rows.map((r) => ({ ...r, slug: idx.slugOf(r.reg_num) }));
+): Array<T & { slug: string; headline: string }> {
+  const ci = concessionIndex(db);
+  return rows.map((r) => ({
+    ...r,
+    slug: ci.urls.slugOf(r.reg_num),
+    headline:
+      ci.headline.get(r.reg_num) ??
+      ("title" in r && typeof r.title === "string" ? r.title : r.reg_num),
+  }));
 }
 
 /** Slug за суров партиден номер. */

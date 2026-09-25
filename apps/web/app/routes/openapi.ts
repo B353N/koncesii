@@ -29,7 +29,7 @@ const SPEC = {
   },
   servers: [{ url: BASE }],
   paths: {
-    "/concessions.csv": {
+    "/koncesii.csv": {
       get: {
         summary: "Всички концесии като CSV (с филтрите на списъка)",
         parameters: [
@@ -57,7 +57,7 @@ const SPEC = {
         responses: CSV_RESPONSE,
       },
     },
-    "/concessions/{slug}/json": {
+    "/koncesii/{slug}/json": {
       get: {
         summary:
           "Пълните данни на една концесия: стойности с флагове за качество, обекти, документи (с метода на текста), извлечени от документите клаузи с цитат и страница (facts), плащания, индикатори и източници",
@@ -67,33 +67,33 @@ const SPEC = {
             in: "path",
             required: true,
             description:
-              "slug на партидата - номерът от НКР с „/“, „#“ и интервали, заменени с „-“ (напр. O-000123, 221-72-07.10.2020); суровият номер също се приема и прави 301 към slug адреса",
+              "slug на партидата - описание на латиница и номерът от НКР накрая (напр. morski-plazh-panorama-sever-varna-215-135-12-11-2021); суровият номер, само номерът (o-000123) и старите адреси /concessions/... също се приемат и правят 301 към каноничния адрес",
             schema: { type: "string" },
           },
         ],
         responses: {
           "200": {
             description:
-              "Концесията; всяко парично поле носи *_raw (оригинала), *_eur (нормализирано, BGN→EUR по 1.95583) и *_flag (качество: ok/missing/parsed_from_text/contradictory); facts[] носи value_raw, quote, page, document_url и outcome (filled/agrees/conflict/display)",
+              "Концесията; всяко парично поле носи *_raw (оригинала), *_eur (нормализирано, BGN→EUR по 1.95583) и *_flag (качество: ok/missing/parsed_from_text/contradictory); facts[] носи value_raw, quote, page, document_url и outcome (filled/agrees/compatible/conflict/display)",
             content: { "application/json": { schema: { type: "object" } } },
           },
           "404": { description: "Няма партида с този номер" },
         },
       },
     },
-    "/grantors.csv": {
+    "/koncedenti.csv": {
       get: {
         summary: "Концеденти (органи) с брой концесии и индикатори",
         responses: CSV_RESPONSE,
       },
     },
-    "/companies.csv": {
+    "/kompanii.csv": {
       get: {
         summary: "Концесионери (компании по ЕИК) с брой концесии",
         responses: CSV_RESPONSE,
       },
     },
-    "/flags.csv": {
+    "/indikatori.csv": {
       get: {
         summary: "Концесии с индикатори за риск",
         parameters: [
@@ -108,7 +108,7 @@ const SPEC = {
         responses: CSV_RESPONSE,
       },
     },
-    "/map.geojson": {
+    "/karta.geojson": {
       get: {
         summary: "Геокодирани обекти на концесии (приблизителни центроиди)",
         responses: {

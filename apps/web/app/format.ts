@@ -173,9 +173,18 @@ export const FACT_ORDER = [
 export const FACT_OUTCOMES: Record<string, string> = {
   filled: "попълнено от документа — регистърът няма стойност",
   agrees: "съвпада с регистъра",
+  compatible:
+    "съвместимо с регистъра - документът дава срока без удълженията, регистърът е по-дълъг",
   conflict: "разминава се с регистъра — отбелязано, не поправено",
   display: "само от документа",
   alternative: "друг кандидат",
+};
+
+/** Отметката в отчета за изпълнение - дословно, без оценка. */
+export const FULFILLMENT_LABELS: Record<string, string> = {
+  full: "пълно изпълнение",
+  partial: "частично изпълнение",
+  none: "пълно неизпълнение",
 };
 
 /** Извлечената стойност в четим вид: сумата в евро, срокът в месеци. */
@@ -220,3 +229,57 @@ export function fmtDocumentMeta(d: {
   if (d.text_status === "error") parts.push("текстът не можа да се извлече");
   return parts.join(" · ");
 }
+
+/** Тежестта на индикатор като число за сортиране и за цвета на флагчето. */
+export const SEVERITY_RANK: Record<string, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+};
+
+const QUOTE = '"„“”«»';
+const QUOTED = `[${QUOTE}]\\s*([^${QUOTE}]+?)\\s*[${QUOTE}]`;
+
+/**
+ * Кратък етикет на обект за списъци и картата: „Находище „Кайметлий",
+ * пясъци и чакъли" вместо 250 знака юридически текст. Само съкращава
+ * регистровия текст, не добавя нищо; пълното заглавие остава на партидата.
+ */
+export function shortObjectTitle(title: string): string {
+  const t = title.replace(/\s+/gu, " ").trim();
+  const deposit = new RegExp(`находище\\s*${QUOTED}`, "iu").exec(t);
+  if (deposit) {
+    let name = deposit[1]!;
+    // някои партиди са изцяло с главни букви
+    if (name === name.toUpperCase())
+      name = name
+        .toLowerCase()
+        .replace(/(^|[\s-])\p{L}/gu, (c) => c.toUpperCase());
+    const material =
+      /материали\s*[-–]\s*([^,]+?)(?:,|\s+от\s+находище)/iu.exec(t) ??
+      /изкопаеми\s*[-–]\s*([^,]+?)(?:,|\s+от)/iu.exec(t);
+    const head = `Находище „${name}“`;
+    return material ? `${head}, ${material[1]!.trim().toLowerCase()}` : head;
+  }
+  const beach = new RegExp(`морски плаж\\s*${QUOTED}`, "iu").exec(t);
+  if (beach) return `Морски плаж „${beach[1]}“`;
+  const rest = t
+    .replace(/^[КK]онцесия за (добив|ползване|услуга|строителство)?\s*/iu, "")
+    .replace(/,\s*област.*$/iu, "");
+  const head = rest.charAt(0).toUpperCase() + rest.slice(1);
+  if (head.length <= 110) return head;
+  const cut = head.slice(0, 110);
+  return cut.slice(0, Math.max(60, cut.lastIndexOf(" "))) + "…";
+}
+
+/** Кратките имена на индикаторите за флагчетата в списъка. */
+export const FLAG_SHORT: Record<string, string> = {
+  LOW_PAYMENT: "Ниско възнаграждение",
+  SINGLE_BIDDER: "Един участник",
+  YOUNG_COMPANY: "Нова компания",
+  LONG_TERM: "Дълъг срок",
+  GRACE_PERIOD: "Гратисен период",
+  NO_INDEXATION: "Без индексация",
+  MISSING_MONEY: "Без вписана сума",
+  DATA_CONFLICT: "Противоречие в данните",
+};

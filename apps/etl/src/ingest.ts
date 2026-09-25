@@ -86,7 +86,8 @@ export function runIngest(
         `[ingest] документи: ${documents.documents} файла, ${documents.withText} с текст, ` +
           `${documents.pages} страници (${documents.ocrPages} с OCR), ` +
           `клаузи: ${documents.facts} (попълнени ${documents.filled}, съвпадат ${documents.agrees}, ` +
-          `разминавания ${documents.conflicts}), суми: ${documents.amounts}`,
+          `разминавания ${documents.conflicts}), суми: ${documents.amounts}, ` +
+          `години от отчетите за изпълнение: ${documents.reportedPayments}`,
       );
       const nFlags = deriveFlags(db, date);
 

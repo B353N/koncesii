@@ -6,6 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
+import { crc32 } from "node:zlib";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractDocFacts, normalizeDocText, splitPages } from "ingest";
@@ -53,6 +54,28 @@ describe("разпознаване без инструменти", () => {
       "markup",
     );
     expect(sniff(Buffer.from("просто текст"), ".bin")).toBe("unsupported");
+    // Windows записва XML в UTF-16 с BOM
+    const utf16 = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from('<?xml version="1.0"?><a/>', "utf16le"),
+    ]);
+    expect(sniff(utf16.subarray(0, 64), ".xml")).toBe("markup");
+    expect(markupText(utf16)).toBe("");
+    expect(
+      markupText(
+        Buffer.concat([
+          Buffer.from([0xff, 0xfe]),
+          Buffer.from("<a>срок 25 години</a>", "utf16le"),
+        ]),
+      ),
+    ).toBe("срок 25 години");
+    // формулярите в НКР идват и в UTF-16 без BOM
+    const noBom = Buffer.from(
+      '<?xml version="1.0" encoding="utf-16"?><a>Срок: 10 години</a>',
+      "utf16le",
+    );
+    expect(sniff(noBom.subarray(0, 64), ".xml")).toBe("markup");
+    expect(markupText(noBom)).toBe("Срок: 10 години");
   });
 
   test("страница без текст или със „счупен“ шрифт отива на OCR", () => {
@@ -122,6 +145,7 @@ describe("броячите и повторните опити, без инстр
     soffice: null,
     unzip: null,
     archiver: null,
+    gs: null,
   };
 
   beforeAll(() => {
@@ -257,3 +281,71 @@ describe.skipIf(!canPdf)("pnpm extract върху фикстурите", () => {
     expect(again.skipped).toBe(summary.files - retried);
   });
 });
+
+describe.skipIf(!canPdf || !tools.archiver?.startsWith("unar:"))(
+  "ZIP с кирилско име в CP866 (от български Windows)",
+  () => {
+    const dir = join(tmpdir(), `koncesii-extract-cp866-${process.pid}`);
+    const nkr = join(dir, "nkr_data");
+
+    beforeAll(async () => {
+      rmSync(dir, { recursive: true, force: true });
+      mkdirSync(join(nkr, "files", "lot"), { recursive: true });
+      // ZIP с един файл, чието име е в CP866 без UTF-8 флаг - сглобен ръчно
+      const pdf = readFileSync(join(FIXTURES, "contract.pdf"));
+      const name = Buffer.from([
+        0x84, 0xae, 0xa3, 0xae, 0xa2, 0xae, 0xe0, 0x2e, 0x70, 0x64, 0x66,
+      ]); // „Договор.pdf“
+      const crc = crc32(pdf);
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x04034b50, 0);
+      local.writeUInt16LE(20, 4);
+      local.writeUInt32LE(crc, 14);
+      local.writeUInt32LE(pdf.length, 18);
+      local.writeUInt32LE(pdf.length, 22);
+      local.writeUInt16LE(name.length, 26);
+      const central = Buffer.alloc(46);
+      central.writeUInt32LE(0x02014b50, 0);
+      central.writeUInt16LE(20, 4);
+      central.writeUInt16LE(20, 6);
+      central.writeUInt32LE(crc, 16);
+      central.writeUInt32LE(pdf.length, 20);
+      central.writeUInt32LE(pdf.length, 24);
+      central.writeUInt16LE(name.length, 28);
+      const cdOffset = local.length + name.length + pdf.length;
+      const end = Buffer.alloc(22);
+      end.writeUInt32LE(0x06054b50, 0);
+      end.writeUInt16LE(1, 8);
+      end.writeUInt16LE(1, 10);
+      end.writeUInt32LE(central.length + name.length, 12);
+      end.writeUInt32LE(cdOffset, 16);
+      writeFileSync(
+        join(nkr, "files", "lot", "arch.zip"),
+        Buffer.concat([local, name, pdf, central, name, end]),
+      );
+      writeFileSync(
+        join(nkr, "files.jsonl"),
+        JSON.stringify({
+          lot_guid: "lot",
+          href: "/File/Download/arch",
+          url: "https://nkr.government.bg/File/Download/arch",
+          title: "arch",
+          status: "ok",
+          file: "files/lot/arch.zip",
+        }) + "\n",
+      );
+      await runExtract(dir, { tools });
+    }, 120_000);
+
+    afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+    test("документът вътре се извлича, името е декодирано", () => {
+      const meta = JSON.parse(
+        readFileSync(join(nkr, "text", "lot", "arch.meta.json"), "utf8"),
+      ) as TextMeta;
+      expect(meta.error).toBeUndefined();
+      expect(meta).toMatchObject({ kind: "zip", status: "ok", pages: 2 });
+      expect(meta.entries?.[0]?.name).toBe("Договор.pdf");
+    });
+  },
+);

@@ -4,6 +4,7 @@ import {
   documentRank,
   extractDocAmounts,
   extractDocFacts,
+  extractReportedPayments,
   splitPages,
   type DocFact,
   type DocFactField,
@@ -16,7 +17,8 @@ import type { Snapshot } from "./snapshot";
  *
  *   1. метаданните на свалените файлове (манифестът) → documents;
  *   2. текстът по страници (кешът на pnpm extract) → document_pages + FTS;
- *   3. клаузите (E3) → extracted_facts, всички суми → document_amounts;
+ *   3. клаузите (E3) → extracted_facts, всички суми → document_amounts,
+ *      т. 4.9 от отчетите за изпълнение → reported_payments;
  *   4. попълване: избраният кандидат за поле попълва само ЛИПСВАЩО поле
  *      (flag 'parsed_from_text'); разминаване с регистъра → 'contradictory'
  *      + review_queue. Нищо не се презаписва (ADR-0003, „НКР печели").
@@ -35,6 +37,8 @@ export interface DocumentStats {
   agrees: number;
   conflicts: number;
   amounts: number;
+  /** Години от отчетите за изпълнение (след премахване на повторенията). */
+  reportedPayments: number;
 }
 
 interface Candidate extends DocFact {
@@ -123,6 +127,7 @@ export function ingestDocuments(
     agrees: 0,
     conflicts: 0,
     amounts: 0,
+    reportedPayments: 0,
   };
 
   const docs = db
@@ -143,6 +148,17 @@ export function ingestDocuments(
   const insPage = db.prepare(
     "INSERT INTO document_pages (document_id, page, method, text) VALUES (?, ?, ?, ?)",
   );
+  const insReported = db.prepare(
+    `INSERT INTO reported_payments (concession_id, document_id, year, due_raw,
+       due_amount, due_currency, due_eur, fulfillment, paid_raw, paid_eur, on_time,
+       arrears_raw, arrears_eur, quote, page, document_url, extracted_at)
+     VALUES (@concession_id, @document_id, @year, @due_raw, @due_amount,
+       @due_currency, @due_eur, @fulfillment, @paid_raw, @paid_eur, @on_time,
+       @arrears_raw, @arrears_eur, @quote, @page, @document_url, @extracted_at)`,
+  );
+  // Един и същ отчет често е качен няколко пъти - същата година със същите
+  // стойности се записва веднъж (първият документ). Различните остават.
+  const seenReports = new Set<string>();
   const insAmount = db.prepare(
     `INSERT INTO document_amounts (document_id, concession_id, page, value_raw,
        amount, currency, value_eur, context) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -207,7 +223,7 @@ export function ingestDocuments(
       if (method === "ocr") stats.ocrPages++;
     });
 
-    const rank = documentRank(doc.title ?? rec?.filename);
+    const rank = documentRank(doc.title, rec?.filename);
     const list = candidates.get(doc.concession_id) ?? [];
     for (const f of extractDocFacts(pages)) {
       list.push({
@@ -231,6 +247,40 @@ export function ingestDocuments(
         a.context,
       );
       stats.amounts++;
+    }
+
+    for (const r of extractReportedPayments(pages)) {
+      const key = JSON.stringify([
+        doc.concession_id,
+        r.year,
+        r.dueRaw,
+        r.fulfillment,
+        r.paidRaw,
+        r.onTime,
+        r.arrearsRaw,
+      ]);
+      if (seenReports.has(key)) continue;
+      seenReports.add(key);
+      insReported.run({
+        concession_id: doc.concession_id,
+        document_id: doc.id,
+        year: r.year,
+        due_raw: r.dueRaw,
+        due_amount: r.dueAmount,
+        due_currency: r.dueCurrency,
+        due_eur: r.dueEur,
+        fulfillment: r.fulfillment,
+        paid_raw: r.paidRaw,
+        paid_eur: r.paidEur,
+        on_time: r.onTime == null ? null : r.onTime ? 1 : 0,
+        arrears_raw: r.arrearsRaw,
+        arrears_eur: r.arrearsEur,
+        quote: r.quote,
+        page: r.page,
+        document_url: doc.url,
+        extracted_at: date,
+      });
+      stats.reportedPayments++;
     }
   }
 
@@ -288,9 +338,7 @@ export function applyFacts(
         );
 
       list.forEach((c, i) => {
-        let outcome:
-          "filled" | "agrees" | "conflict" | "display" | "alternative" =
-          "alternative";
+        let outcome: Outcome | "alternative" = "alternative";
         if (i === 0) {
           outcome = applyOne(db, concessionId, c, insReview, date);
           if (outcome === "filled") out.filled++;
@@ -323,13 +371,36 @@ export function applyFacts(
   return out;
 }
 
+type Outcome = "filled" | "agrees" | "compatible" | "conflict" | "display";
+
+/**
+ * Срокът в документа е изрично без удълженията („Срок на концесията, без
+ * предвидените удължавания: 180 месеца", „… за срок от 10 години, с
+ * възможност да бъде продължен"), а регистърът е по-дълъг — това са две
+ * различни величини, не противоречие.
+ */
+const EXCLUDES_EXTENSIONS_RE =
+  /без\s+(?:\p{L}+\s+)?удължавани|възможност\p{L}*[^.;]{0,80}?(?:продълж|удълж)/iu;
+
+function compatibleTerm(
+  c: Candidate,
+  value: number,
+  registry: number,
+): boolean {
+  return (
+    c.field === "term" &&
+    registry > value &&
+    EXCLUDES_EXTENSIONS_RE.test(c.quote)
+  );
+}
+
 function applyOne(
   db: Database.Database,
   concessionId: string,
   c: Candidate,
   insReview: Database.Statement,
   date: string,
-): "filled" | "agrees" | "conflict" | "display" {
+): Outcome {
   const cols = COLUMNS[c.field];
   const value = numberOf(c);
   if (!cols || value == null) return "display";
@@ -357,6 +428,9 @@ function applyOne(
   const currentNum = current["num"] as number | null;
   if (currentNum != null && agreesWithRegistry(c, value, currentNum)) {
     return "agrees";
+  }
+  if (currentNum != null && compatibleTerm(c, value, currentNum)) {
+    return "compatible";
   }
 
   // Разминаване: регистърът печели, но противоречието се записва и флагва.

@@ -56,15 +56,14 @@ export function changedUrls(dbPath: string, date: string): string[] {
       .all(date);
     if (rows.length === 0) return [];
 
-    // при колизия на slug сайтът дава суфикс -2; известяваме базовия
-    // адрес, а сайтът прави 301 - IndexNow приема пренасочвания
-    const urls = rows.map(
-      (r) => `${BASE}/concessions/${regNumSlug(r.reg_num)}`,
-    );
+    // каноничният адрес е описание + номер и се смята в сайта; известяваме
+    // адреса само с номера, а сайтът прави едно 301 към каноничния -
+    // IndexNow приема пренасочвания
+    const urls = rows.map((r) => `${BASE}/koncesii/${regNumSlug(r.reg_num)}`);
     return [
       `${BASE}/`,
-      `${BASE}/changes`,
-      `${BASE}/concessions`,
+      `${BASE}/promeni`,
+      `${BASE}/koncesii`,
       ...new Set(urls),
     ].slice(0, MAX_URLS);
   } finally {

@@ -31,10 +31,26 @@ import { PATHS } from "./paths";
 
 /** Google Analytics 4 — само в production, за да не шуми dev трафикът. */
 const GA_ID = "G-GT7K4WV5PM";
+/**
+ * gtag.js (173 KB) тръгва след `load` и в първия свободен момент на главната
+ * нишка, не в head: събитията се трупат в dataLayer и се пращат, щом
+ * зареди, а първият екран не се състезава с него за канала и процесора.
+ * Външният скрипт е позволен от script-src (entry.server.tsx).
+ */
 const GA_INIT = `window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
-gtag('config', '${GA_ID}');`;
+gtag('config', '${GA_ID}');
+addEventListener('load', function () {
+  var go = function () {
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=${GA_ID}';
+    document.head.appendChild(s);
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(go, { timeout: 4000 });
+  else setTimeout(go, 1500);
+});`;
 
 /** Основната навигация: един ред. Останалото е в менюто „Още" и във футъра. */
 const NAV = [
@@ -122,16 +138,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           dangerouslySetInnerHTML={jsonLdScript(websiteJsonLd())}
         />
         {import.meta.env.PROD && (
-          <>
-            <script
-              async
-              src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
-            />
-            <script
-              nonce={nonce}
-              dangerouslySetInnerHTML={{ __html: GA_INIT }}
-            />
-          </>
+          <script nonce={nonce} dangerouslySetInnerHTML={{ __html: GA_INIT }} />
         )}
       </head>
       <body className="bg-paper font-sans text-[15px] text-ink antialiased">
@@ -201,7 +208,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div>
               <Link
                 to="/"
-                className="flex items-center gap-2 font-display text-[15px] font-bold text-ink no-underline"
+                  className="flex items-center gap-2 font-display text-[15px] font-bold text-ink no-underline"
               >
                 <LogoMark />
                 концесии

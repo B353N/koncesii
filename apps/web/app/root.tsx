@@ -248,16 +248,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 Отворен код
               </a>
-              <span className="mt-3">
+              <span className="mt-3 inline-flex items-center gap-1.5">
                 Изработка на сайта:{" "}
                 <a
-                  className="text-stone underline underline-offset-2 hover:text-water"
-                  href="https://prowebsite.bg/"
-                  title="ProWebsite.bg - изработка на уеб сайтове и онлайн магазини"
+                  className="inline-flex items-center text-stone opacity-90 hover:text-water hover:opacity-100"
+                  href="https://prowebsite.bg/?utm_source=koncesii&utm_medium=referral&utm_content=footer"
+                  title="Pro Website: изработка и поддръжка на сайтове"
                   target="_blank"
                   rel="noopener"
                 >
-                  ProWebsite.bg - изработка на уеб сайтове
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 4.8 73.69 33.2"
+                    className="block h-[15px] w-auto"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M2.75 32V6.8H13.52Q16.42 6.8 18.68 7.83Q20.95 8.85 22.26 10.81Q23.56 12.76 23.56 15.51Q23.56 18.28 22.36 20.23Q21.15 22.17 18.86 23.2Q16.58 24.22 13.34 24.22H10.03V32ZM10.03 18.21H13.05Q14.56 18.21 15.43 17.65Q16.29 17.08 16.29 15.62Q16.29 14.11 15.39 13.55Q14.49 12.99 13.09 12.99H10.03Z M30.24 32 22.53 6.8H30.02L33.62 20.88L37.62 6.8H44.78L48.78 20.88L52.38 6.8H59.69L51.98 32H45.03L41.07 17.49L37.11 32Z"
+                    />
+                    <circle cx="67.69" cy="32" r="4" fill="#FF4D2E" />
+                  </svg>
+                  <span className="sr-only">Pro Website</span>
                 </a>
               </span>
             </nav>

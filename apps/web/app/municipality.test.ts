@@ -4,7 +4,6 @@ import {
   municipalitySlug,
   resolveMunicipality,
   settlementsIn,
-  withoutEgn,
 } from "./municipality";
 
 test("общината на обекта е с предимство", () => {
@@ -75,13 +74,10 @@ test("назованите населени места", () => {
   ).toEqual(["Михалково", "Долна баня", "Две Могили"]);
 });
 
-test("регистровият шум не е концесионер, ЕГН не се показва", () => {
+test("регистровият шум не е концесионер", () => {
   expect(isPlaceholderName("Не е приложимо")).toBe(true);
   expect(isPlaceholderName("х")).toBe(true);
   expect(isPlaceholderName("„МАТ“ ООД")).toBe(false);
-  expect(withoutEgn("Иван Петров Иванов с ЕГН 1234567890")).toBe(
-    "Иван Петров Иванов",
-  );
   expect(
     settlementsIn(["в землището на с. Шкорпиловци Концесия за добив"]),
   ).toEqual(["Шкорпиловци"]);

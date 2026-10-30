@@ -150,11 +150,6 @@ export function isPlaceholderName(name: string | null | undefined): boolean {
   );
 }
 
-/** Името без ЕГН на физическо лице - личните данни не се показват. */
-export function withoutEgn(name: string): string {
-  return name.replace(/,?\s*(с\s+)?ЕГН[\s:№]*\d{10}/giu, "").trim();
-}
-
 /** Населените места, изрично назовани в текста („с. Михалково"). */
 export function settlementsIn(texts: string[]): string[] {
   const out = new Set<string>();

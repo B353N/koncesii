@@ -158,10 +158,27 @@ const FLAG_LABEL: Record<string, string> = {
 function SourceQuote({
   raw,
   flag,
+  doc,
 }: {
   raw?: string | null;
   flag?: string | null;
+  /** Стойността е попълнена от прикачен документ, не от регистъра. */
+  doc?: { href: string; page: number } | null;
 }) {
+  if (doc && raw != null) {
+    return (
+      <span className="block text-[12px] break-words text-stone">
+        от документа: „{raw}“ ·{" "}
+        <Link
+          to={`${doc.href}#str-${doc.page}`}
+          className="text-water underline underline-offset-2"
+        >
+          стр. {doc.page}
+        </Link>{" "}
+        · регистърът няма стойност
+      </span>
+    );
+  }
   const flagText = flag ? (FLAG_LABEL[flag] ?? flag) : null;
   if (raw == null)
     return flagText ? (
@@ -316,11 +333,13 @@ function StatTile({
   value,
   raw,
   flag,
+  doc,
 }: {
   label: string;
   value: string;
   raw?: string | null;
   flag?: string | null;
+  doc?: { href: string; page: number } | null;
 }) {
   const missing = value === "няма данни";
   return (
@@ -334,7 +353,7 @@ function StatTile({
         {value}
       </b>
       <div className="mt-1.5">
-        <SourceQuote raw={raw} flag={flag} />
+        <SourceQuote raw={raw} flag={flag} doc={doc} />
       </div>
     </div>
   );
@@ -681,6 +700,16 @@ function Answers({
 export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
   const { detail, titles, related, municipality, bands } = loaderData;
   const c = detail.concession;
+  // Кое поле е попълнено от документ (регистърът е без стойност) — плочката
+  // сочи документа, не регистъра.
+  const filledFrom = (field: string) => {
+    const f = detail.facts.find(
+      (x) => x.field === field && x.outcome === "filled",
+    );
+    return f
+      ? { href: documentHref(detail.slug, f.document_key), page: f.page }
+      : null;
+  };
   const heading = titles.headline;
   const description = descriptionOf(detail, heading);
   // Регистровата стойност никога не изчезва: ако заглавието на страницата
@@ -838,24 +867,28 @@ export default function ConcessionDetail({ loaderData }: Route.ComponentProps) {
           }
           raw={c.term_raw}
           flag={c.term_flag}
+          doc={filledFrom("term")}
         />
         <StatTile
           label="Годишно възнаграждение"
           value={moneyShort(c.annual_payment_raw, c.annual_payment_eur)}
           raw={c.annual_payment_raw}
           flag={c.annual_payment_flag}
+          doc={filledFrom("annual_payment")}
         />
         <StatTile
           label="Стойност на концесията"
           value={moneyShort(c.value_raw, c.value_eur)}
           raw={c.value_raw}
           flag={c.value_flag}
+          doc={filledFrom("value")}
         />
         <StatTile
           label="Еднократно възнаграждение"
           value={moneyShort(c.onetime_payment_raw, c.onetime_payment_eur)}
           raw={c.onetime_payment_raw}
           flag={c.onetime_payment_flag}
+          doc={filledFrom("onetime_payment")}
         />
       </div>
 
